@@ -102,16 +102,6 @@ macro(add_plugin_test plugin_name test_files)
     add_plugin_test_ex(${plugin_opt} "${test_files}" "../../${plugin_name}" "${NAMESPACE}${plugin_name}")
 endmacro()
 
-# PLUGIN_POWERMANAGER
-#set (POWERMANAGER_INC ${CMAKE_SOURCE_DIR}/../entservices-deviceanddisplay/PowerManager ${CMAKE_SOURCE_DIR}/../entservices-deviceanddisplay/helpers)
-#set (POWERMANAGER_LIBS ${NAMESPACE}PowerManager ${NAMESPACE}PowerManagerImplementation)
-#add_plugin_test_ex(PLUGIN_POWERMANAGER ../mocks/PowerManagerMock.cpp "${POWERMANAGER_INC}" "${POWERMANAGER_LIBS}")
-
-# PLUGIN_DEVICEINFO
-#set (DEVICEINFO_INC ${CMAKE_SOURCE_DIR}/../entservices-deviceanddisplay/DeviceInfo ${CMAKE_SOURCE_DIR}/../entservices-deviceanddisplay/helpers)
-#set (DEVICEINFO_SRC tests/test_DeviceAudioCapabilities.cpp tests/test_DeviceInfo.cpp tests/test_DeviceInfoJsonRpc.cpp tests/test_DeviceInfoWeb.cpp test_FirmwareVersion tests/test_DeviceVideoCapabilities.cpp)
-#add_plugin_test_ex(PLUGIN_DEVICEINFO "${DEVICEINFO_SRC}" "${DEVICEINFO_INC}" "${NAMESPACE}DeviceInfo")
-
 # PLUGIN_FRAMERATE
 set (FRAMERATE_INC ${CMAKE_CURRENT_SOURCE_DIR}/../../plugin ${CMAKE_CURRENT_SOURCE_DIR}/../../helpers)
 set (FRAMERATE_LIBS ${NAMESPACE}FrameRate ${NAMESPACE}FrameRateImplementation)
