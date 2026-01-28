@@ -138,7 +138,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-framerate
           path: entservices-framerate
-          ref: RDKEMW-12801
+          ref: feature/RDKEMW-12941
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
