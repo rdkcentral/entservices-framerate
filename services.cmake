@@ -30,7 +30,6 @@ add_definitions (-DUSE_IARMBUS)
 add_definitions (-DUSE_TR_69)
 
 add_definitions (-DHAS_API_SYSTEM)
-add_definitions(-DRDK_LOG_MILESTONE)
 
 add_definitions (-DUSE_DS)
 
