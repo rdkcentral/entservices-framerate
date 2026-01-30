@@ -18,7 +18,6 @@
 #
 # features
 #
-
 add_definitions (-DUSE_IARM)
 option(USE_IARM "USE_IARM" ON)
 
