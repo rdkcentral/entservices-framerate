@@ -138,6 +138,7 @@ touch rfcapi.h
 touch rbus.h
 touch telemetry_busmessage_sender.h
 touch maintenanceMGR.h
+touch proc/readproc.h
 touch pkg.h
 echo "files created successfully"
 echo "======================================================================================"
