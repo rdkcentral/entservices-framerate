@@ -99,6 +99,7 @@ mkdir -p headers/rdk/iarmbus
 mkdir -p headers/rdk/iarmmgrs-hal
 mkdir -p headers/rdk/halif/
 mkdir -p headers/rdk/halif/deepsleep-manager
+mkdir -p headers/proc
 echo "dir created successfully"
 echo "======================================================================================"
 
