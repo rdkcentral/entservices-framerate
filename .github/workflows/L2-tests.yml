@@ -88,26 +88,26 @@ jobs:
           path: ThunderTools
           ref: R4.4.3
 
-      - name: Checkout entservices-deviceanddisplay
+      - name: Checkout entservices-framerate
         if: ${{ inputs.caller_source == 'local' }}
         uses: actions/checkout@v3
         with:
-          path: entservices-deviceanddisplay
+          path: entservices-framerate
 
-      - name: Checkout entservices-deviceanddisplay-testframework
+      - name: Checkout entservices-framerate-testframework
         if: ${{ inputs.caller_source == 'testframework' }}
         uses: actions/checkout@v3
         with:
-          repository: rdkcentral/entservices-deviceanddisplay
-          path: entservices-deviceanddisplay
-          ref: develop
+          repository: rdkcentral/entservices-framerate
+          path: entservices-framerate
+          ref: feature/RDKEMW-12941
 
       - name: Checkout entservices-testframework
         uses: actions/checkout@v3
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: develop
+          ref: feature/RDKEMW-12935
           token: ${{ secrets.RDKCM_RDKE }}
 
       - name: Checkout googletest
@@ -312,11 +312,11 @@ jobs:
           &&
           cmake --install build/mocks
 
-      - name: Build entservices-deviceanddisplay
+      - name: Build entservices-framerate
         run: >
           cmake
-          -S "$GITHUB_WORKSPACE/entservices-deviceanddisplay"
-          -B build/entservices-deviceanddisplay
+          -S "$GITHUB_WORKSPACE/entservices-framerate"
+          -B build/entservices-framerate
           -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
           -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
@@ -339,7 +339,7 @@ jobs:
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices/proc
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks
-          -I $GITHUB_WORKSPACE/entservices-deviceanddisplay/helpers
+          -I $GITHUB_WORKSPACE/entservices-framerate/helpers
           -I $GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
@@ -378,12 +378,6 @@ jobs:
           -DCMAKE_DISABLE_FIND_PACKAGE_Udev=ON
           -DCMAKE_DISABLE_FIND_PACKAGE_RFC=ON
           -DCMAKE_DISABLE_FIND_PACKAGE_RBus=ON
-          -DPLUGIN_SYSTEMMODE=ON
-          -DPLUGIN_SYSTEMSERVICES=ON
-          -DPLUGIN_POWERMANAGER=ON
-          -DPLUGIN_DEVICEDIAGNOSTICS=ON
-          -DPLUGIN_DISPLAYSETTINGS=ON
-          -DPLUGIN_WAREHOUSE=ON
           -DPLUGIN_FRAMERATE=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
@@ -391,9 +385,9 @@ jobs:
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
-          cmake --build build/entservices-deviceanddisplay
+          cmake --build build/entservices-framerate
           &&
-          cmake --install build/entservices-deviceanddisplay
+          cmake --install build/entservices-framerate
 
       - name: Build entservices-testframework
         run: >
@@ -421,7 +415,7 @@ jobs:
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices/proc
-          -I $GITHUB_WORKSPACE/entservices-deviceanddisplay/helpers
+          -I $GITHUB_WORKSPACE/entservices-framerate/helpers
           -I $GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
@@ -461,15 +455,7 @@ jobs:
           -DCMAKE_DISABLE_FIND_PACKAGE_Udev=ON
           -DCMAKE_DISABLE_FIND_PACKAGE_RFC=ON
           -DCMAKE_DISABLE_FIND_PACKAGE_RBus=ON
-          -DPLUGIN_SYSTEMSERVICES=ON
-          -DPLUGIN_POWERMANAGER=ON
-          -DPLUGIN_DISPLAYSETTINGS=ON
-          -DPLUGIN_DEVICEDIAGNOSTICS=ON
-          -DPLUGIN_WAREHOUSE=ON
-          -DPLUGIN_AVINPUT=OFF
-          -DPLUGIN_AVOUTPUT=OFF
           -DPLUGIN_FRAMERATE=ON
-          -DAVOUTPUT_TV=OFF
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
           -DRDK_SERVICE_L2_TEST=ON
@@ -615,12 +601,12 @@ jobs:
           &&
           lcov -c
           -o coverage.info
-          -d build/entservices-deviceanddisplay
+          -d build/entservices-framerate
           &&
           lcov
           -r coverage.info
           '/usr/include/*'
-          '*/build/entservices-deviceanddisplay/_deps/*'
+          '*/build/entservices-framerate/_deps/*'
           '*/build/entservices-entservices-testframework/_deps/*'
           '*/install/usr/include/*'
           '*/Tests/headers/*'
@@ -633,14 +619,14 @@ jobs:
           &&
           genhtml
           -o coverage
-          -t "entservices-deviceanddisplay coverage"
+          -t "entservices-framerate coverage"
           filtered_coverage.info
 
       - name: Upload artifacts
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-L2-deviceanddisplay
+          name: artifacts-L2-framerate
           path: |
             coverage/
             valgrind_log
