@@ -123,22 +123,22 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: develop
+          ref: feature/RDKEMW-12935
           token: ${{ secrets.RDKCM_RDKE }}
 
-      - name: Checkout entservices-deviceanddisplay
+      - name: Checkout entservices-framerate
         if: ${{ inputs.caller_source == 'local' }}
         uses: actions/checkout@v3
         with:
-          path: entservices-deviceanddisplay
+          path: entservices-framerate
 
-      - name: Checkout entservices-deviceanddisplay-testframework
+      - name: Checkout entservices-framerate-testframework
         if: ${{ inputs.caller_source == 'testframework' }}
         uses: actions/checkout@v3
         with:
-          repository: rdkcentral/entservices-deviceanddisplay
-          path: entservices-deviceanddisplay
-          ref: develop
+          repository: rdkcentral/entservices-framerate
+          path: entservices-framerate
+          ref: feature/RDKEMW-12941
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
@@ -357,7 +357,7 @@ jobs:
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/ccec/drivers
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/network
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests
-          -I$GITHUB_WORKSPACE/entservices-deviceanddisplay/helpers
+          -I$GITHUB_WORKSPACE/entservices-framerate/helpers
           -I$GITHUB_WORKSPACE/Thunder/Source
           -I$GITHUB_WORKSPACE/Thunder/Source/core
           -I$GITHUB_WORKSPACE/install/usr/include
@@ -385,7 +385,6 @@ jobs:
           -DENABLE_THERMAL_PROTECTION
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
-          -DHAS_API_POWERSTATE
           -DHAS_RBUS
           -D_DRM_MODE_H
           -DENABLE_DEVICE_MANUFACTURER_INFO"
@@ -395,11 +394,11 @@ jobs:
           &&
           cmake --install build/mocks
 
-      - name: Build entservices-deviceanddisplay
+      - name: Build entservices-framerate
         run: >
           cmake -G Ninja
-          -S "$GITHUB_WORKSPACE/entservices-deviceanddisplay"
-          -B build/entservices-deviceanddisplay
+          -S "$GITHUB_WORKSPACE/entservices-framerate"
+          -B build/entservices-framerate
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
           -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
           -DCMAKE_CXX_FLAGS="
@@ -419,7 +418,7 @@ jobs:
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/ccec/drivers
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/network
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests
-          -I$GITHUB_WORKSPACE/entservices-deviceanddisplay/helpers
+          -I$GITHUB_WORKSPACE/entservices-framerate/helpers
           -I$GITHUB_WORKSPACE/Thunder/Source
           -I$GITHUB_WORKSPACE/Thunder/Source/core
           -I$GITHUB_WORKSPACE/install/usr/include
@@ -452,7 +451,6 @@ jobs:
           -DENABLE_THERMAL_PROTECTION
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
-          -DHAS_API_POWERSTATE
           -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
@@ -470,19 +468,11 @@ jobs:
           -DRDK_SERVICES_L1_TEST=ON
           -DUSE_THUNDER_R4=ON
           -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
-          -DPLUGIN_DEVICEDIAGNOSTICS=ON
-          -DPLUGIN_USERPREFERENCES=ON
-          -DPLUGIN_WAREHOUSE=ON
-          -DPLUGIN_DEVICEINFO=OFF
-          -DPLUGIN_DISPLAYINFO=ON
-          -DPLUGIN_DISPLAYSETTINGS=OFF
           -DPLUGIN_FRAMERATE=ON
-          -DPLUGIN_POWERMANAGER=ON
-          -DPLUGIN_SYSTEMSERVICES=ON
           &&
-          cmake --build build/entservices-deviceanddisplay
+          cmake --build build/entservices-framerate
           &&
-          cmake --install build/entservices-deviceanddisplay
+          cmake --install build/entservices-framerate
 
       - name: Build entservices-testframework
         run: >
@@ -507,7 +497,7 @@ jobs:
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/ccec/drivers
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/network
-          -I$GITHUB_WORKSPACE/entservices-deviceanddisplay/helpers
+          -I$GITHUB_WORKSPACE/entservices-framerate/helpers
           -I$GITHUB_WORKSPACE/entservices-testframework/Tests
           -I$GITHUB_WORKSPACE/Thunder/Source
           -I$GITHUB_WORKSPACE/Thunder/Source/core
@@ -540,7 +530,6 @@ jobs:
           -DENABLE_THERMAL_PROTECTION
           -DUSE_DRM_SCREENCAPTURE
           -DHAS_API_SYSTEM
-          -DHAS_API_POWERSTATE
           -D_DRM_MODE_H=ON
           -DHAS_RBUS
           -DENABLE_DEVICE_MANUFACTURER_INFO"
@@ -555,14 +544,7 @@ jobs:
           -DUSE_DEVICESETTINGS=ON
           -DBUILD_RPI=ON
           -DHAS_FRONT_PANEL=ON
-          -DPLUGIN_SYSTEMSERVICES=ON
-          -DPLUGIN_DEVICEINFO=OFF
-          -DPLUGIN_POWERMANAGER=ON
           -DPLUGIN_FRAMERATE=ON
-          -DPLUGIN_USERPREFERENCES=ON
-          -DPLUGIN_WAREHOUSE=ON
-          -DPLUGIN_DEVICEDIAGNOSTICS=ON
-          -DPLUGIN_DISPLAYINFO=ON
           -DRDK_SERVICES_L1_TEST=ON
           -DUSE_THUNDER_R4=ON
           -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
@@ -689,12 +671,12 @@ jobs:
           &&
           lcov -c
           -o coverage.info
-          -d build/entservices-deviceanddisplay
+          -d build/entservices-framerate
           &&
           lcov
           -r coverage.info
           '/usr/include/*'
-          '*/build/entservices-deviceanddisplay/_deps/*'
+          '*/build/entservices-framerate/_deps/*'
           '*/install/usr/include/*'
           '*/Tests/headers/*'
           '*/Tests/mocks/*'
@@ -704,13 +686,13 @@ jobs:
           &&
           genhtml
           -o coverage
-          -t "entservices-deviceanddisplay coverage"
+          -t "entservices-framerate coverage"
           filtered_coverage.info
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-L1-deviceanddisplay
+          name: artifacts-L1-framerate
           path: |
             coverage/
             valgrind_log

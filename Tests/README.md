@@ -16,10 +16,10 @@ This ensures everything in-tact in repo level across multiple related plugins wh
 ##### Steps to run L1, L2, L2-OOP test locally #####
 ```
 1. checkout the entservices-<repo-name> to your working directory in your build machine.
-example: git clone https://github.com/rdkcentral/entservices-deviceanddisplay.git
+example: git clone https://github.com/rdkcentral/entservices-framerate.git
 
 2. switch to entservices-<repo-name> directory
-example: cd entservices-deviceanddisplay
+example: cd entservices-framerate
 
 3. check and ensure current working branch points to develop
 example: git branch
@@ -45,14 +45,14 @@ a/ changes in testframework repo only:
 Need to change ref pointer of "Checkout entservices-testframework" job in individual repo yml file, to point your current working branch of testframework and in tftrigger.yml of testframework repo need to change trigger branch name to your individual repo branch name instead of develop which is default.
 example:
 ref: topic/method_1  /* Checkout entservices-testframework job */
-uses: rdkcentral/entservices-deviceanddisplay/.github/workflows/L1-tests.yml@topic/method_1 /* tf-trigger.yml */
+uses: rdkcentral/entservices-framerate/.github/workflows/L1-tests.yml@topic/method_1 /* tf-trigger.yml */
 
 b/ changes in both testframework repo and invidual repo:
-Changes mentioned in step (a) above + "Checkout entservices-deviceanddisplay-testframework" job in individual repo yml file, ref field to point your deviceanddisplay current working branch.
+Changes mentioned in step (a) above + "Checkout entservices-framerate-testframework" job in individual repo yml file, ref field to point your framerate current working branch.
 example:
 ref: topic/method_1 /* Checkout entservices-testframework job */
-ref: topic/method_1 /* Checkout entservices-deviceanddisplay-testframework job */
-uses: rdkcentral/entservices-deviceanddisplay/.github/workflows/L1-tests.yml@topic/method_1 /* tf-trigger.yml */
+ref: topic/method_1 /* Checkout entservices-framerate-testframework job */
+uses: rdkcentral/entservices-framerate/.github/workflows/L1-tests.yml@topic/method_1 /* tf-trigger.yml */
 
 c/ changes in individual entservices-* repo only
 no changes required
