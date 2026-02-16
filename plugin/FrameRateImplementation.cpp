@@ -337,6 +337,7 @@ namespace WPEFramework
                     !isdigit(framerate.front()) || !isdigit(framerate.back()))
             {
                 LOGERR("Invalid frame rate format: '%s'", framerate.c_str());
+                printf("Test coverity flow: %s\n");
                 return Core::ERROR_INVALID_PARAMETER;
             }
             string sFramerate = framerate;
