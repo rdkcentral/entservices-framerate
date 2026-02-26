@@ -201,7 +201,6 @@ FrameRate_L2test::FrameRate_L2test()
         if (m_controller_FrameRate) {
             EXPECT_TRUE(m_FrameRateplugin != nullptr);
             if (m_FrameRateplugin){
-                m_FrameRateplugin->AddRef();
                 m_FrameRateplugin->Register(&notify);
             }
             else {
