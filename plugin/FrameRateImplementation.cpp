@@ -53,6 +53,7 @@ namespace WPEFramework
 
         FrameRateImplementation::FrameRateImplementation()
             : _adminLock()
+              , _service(nullptr)
               , m_fpsCollectionFrequencyInMs(DEFAULT_FPS_COLLECTION_TIME_IN_MILLISECONDS)
               , m_minFpsValue(DEFAULT_MIN_FPS_VALUE)
               , m_maxFpsValue(DEFAULT_MAX_FPS_VALUE)
@@ -61,6 +62,7 @@ namespace WPEFramework
               , m_fpsCollectionInProgress(false)
               , m_lastFpsValue(0)
         {
+            // Coverity Fix: ID 580 - Uninitialized pointer field
             FrameRateImplementation::_instance = this;
             device::Host::getInstance().Register(this, "WPE::FrameRate");
             // Connect the timer callback handle for triggering FrameRate notifications.
