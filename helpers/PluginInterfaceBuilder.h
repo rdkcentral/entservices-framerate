@@ -38,12 +38,12 @@ namespace Plugin {
 
     public:
         PluginInterfaceRef()
-            : _interface(nullptr)
+            : _interface(nullptr), _service(nullptr)
         {
         }
 
         PluginInterfaceRef(INTERFACE* interface, PluginHost::IShell* controller)
-            : _interface(interface)
+            : _interface(other._interface), _service(other._service)
         {
         }
 
@@ -197,12 +197,12 @@ namespace Plugin {
             return std::move(PluginInterfaceRef<INTERFACE>(interface, _service));
         }
 
-        const uint32_t retryInterval() const
+        uint32_t retryInterval() const
         {
             return _retryInterval;
         }
 
-        const int retryCount() const
+        int retryCount() const
         {
             return _retryCount;
         }
