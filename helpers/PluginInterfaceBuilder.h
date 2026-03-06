@@ -43,7 +43,7 @@ namespace Plugin {
         }
 
         PluginInterfaceRef(INTERFACE* interface, PluginHost::IShell* controller)
-             : _interface(interface), _service(controller)
+            : _interface(interface), _service(controller)
         {
         }
 
