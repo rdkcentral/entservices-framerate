@@ -44,6 +44,7 @@
 #define DBGINFO(fmt, ...)
 #endif
 
+
 namespace WPEFramework
 {
     namespace Plugin
