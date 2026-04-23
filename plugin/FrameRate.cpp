@@ -80,7 +80,7 @@ namespace WPEFramework
             }
             catch(const std::exception& e)
             {
-                LOGERR("device::Manager::Initialize failed, Exception: {%s}", e.what());
+                LOGERR("device::Manager::Initialize failed, Exception: {%s}");
             }
 
             _service = service;
