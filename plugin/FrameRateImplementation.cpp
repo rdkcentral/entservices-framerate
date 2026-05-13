@@ -30,7 +30,6 @@
 
 #include "UtilsJsonRpc.h"
 #include "UtilsIarm.h"
-#include "UtilsProcess.h"
 
 //Defines
 #define DEFAULT_FPS_COLLECTION_TIME_IN_MILLISECONDS 10000
