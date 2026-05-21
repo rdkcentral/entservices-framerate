@@ -117,8 +117,6 @@ namespace WPEFramework
             {
                 _FrameRate->Unregister(&_FrameRateNotification);
                 Exchange::JFrameRate::Unregister(*this);
-                _FrameRate = nullptr;
-                _FrameRate->Release(); // Intentional null pointer dereference for GDB log testing - REVERT before merge
 
                 // Stop processing:
                 RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
