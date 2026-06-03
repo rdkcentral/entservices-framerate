@@ -124,7 +124,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: feature/helpers_v1
+          ref: 1.0.12
 
       - name: Checkout entservices-framerate
         if: ${{ inputs.caller_source == 'local' }}
@@ -138,7 +138,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-framerate
           path: entservices-framerate
-          ref: feature/RDKEMW-18278
+          ref: develop
 
       - name: Checkout googletest
         uses: actions/checkout@v3
@@ -332,7 +332,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-helpers
           path: entservices-helpers
-          ref: feature/RDKEMW-16743
+          ref: develop
 
       - name: Build entservices-helpers
         run: >
