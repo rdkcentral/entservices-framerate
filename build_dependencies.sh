@@ -42,10 +42,10 @@ git clone --branch R4.4.1 https://github.com/rdkcentral/Thunder.git
 git clone --branch develop https://github.com/rdkcentral/entservices-apis.git
 
 cd ..
-git clone --branch feature/RDKEMW-16743 https://github.com/rdkcentral/entservices-helpers.git
+git clone --branch develop https://github.com/rdkcentral/entservices-helpers.git
 cd "$GITHUB_WORKSPACE"
 
-git clone --branch 1.0.1 https://github.com/rdkcentral/entservices-testframework.git
+git clone --branch 1.0.12 https://github.com/rdkcentral/entservices-testframework.git
 
 ############################
 # Build Thunder-Tools
@@ -108,7 +108,19 @@ cmake -G Ninja -S entservices-apis  -B build/entservices-apis \
 cmake --build build/entservices-apis --target install
 
 
-
+############################
+# generating minimal mock headers
+cd $GITHUB_WORKSPACE/entservices-testframework/Tests
+mkdir -p headers
+cd headers
+touch secure_wrapper.h
+touch wpa_ctrl.h
+touch rdk_logger_milestone.h
+mkdir -p rdk/iarmbus
+touch rdk/iarmbus/libIARM.h
+touch rdk/iarmbus/libIBus.h
+touch iarm.h
+cd $GITHUB_WORKSPACE
 #############################
 # Build entservices-helpers
 echo "======================================================================================"
@@ -119,6 +131,7 @@ cmake -G Ninja -S ../entservices-helpers -B build/entservices-helpers \
     -DUSE_THUNDER_R4=ON \
     -DHIDE_NON_EXTERNAL_SYMBOLS=OFF \
     -DPLUGIN_HELPERS=ON \
+    "-DCMAKE_CXX_FLAGS=-I$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers -I$GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmbus -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h " \
 
 cmake --build build/entservices-helpers --target install
 
