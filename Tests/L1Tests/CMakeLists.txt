@@ -33,7 +33,7 @@ set (TEST_LIB
     ${NAMESPACE}Plugins::${NAMESPACE}Plugins
 )
 
-set (TEST_INC ../../helpers)
+set (TEST_INC)
 
 #########################################################################################
 # add_plugin_test_ex: Macro to add plugin tests, it will append to TEST_SRC, TEST_INC,
@@ -103,7 +103,7 @@ macro(add_plugin_test plugin_name test_files)
 endmacro()
 
 # PLUGIN_FRAMERATE
-set (FRAMERATE_INC ${CMAKE_CURRENT_SOURCE_DIR}/../../plugin ${CMAKE_CURRENT_SOURCE_DIR}/../../helpers)
+set (FRAMERATE_INC ${CMAKE_CURRENT_SOURCE_DIR}/../../plugin ${CMAKE_SOURCE_DIR}/../entservices-helpers/helpers)
 set (FRAMERATE_LIBS ${NAMESPACE}FrameRate ${NAMESPACE}FrameRateImplementation)
 add_plugin_test_ex(PLUGIN_FRAMERATE tests/test_FrameRate.cpp "${FRAMERATE_INC}" "${FRAMERATE_LIBS}")
 
