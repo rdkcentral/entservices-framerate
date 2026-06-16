@@ -25,11 +25,16 @@
 #include <mutex>
 
 #include "FrameRateImplementation.h"
+
+#ifndef USE_DEVICESETTING_PLUGIN
 #include "host.hpp"
 #include "exception.hpp"
+#endif
 
 #include "UtilsJsonRpc.h"
+#ifndef USE_DEVICESETTING_PLUGIN
 #include "UtilsIarm.h"
+#endif
 
 //Defines
 #define DEFAULT_FPS_COLLECTION_TIME_IN_MILLISECONDS 10000
@@ -63,14 +68,29 @@ namespace WPEFramework
         {
             // Coverity Fix: ID 580 - Uninitialized pointer field
             FrameRateImplementation::_instance = this;
+#ifdef USE_DEVICESETTING_PLUGIN
+            // _videoDeviceHandle and _notification are initialised in-class
+#else
             device::Host::getInstance().Register(this, "WPE::FrameRate");
+#endif
             // Connect the timer callback handle for triggering FrameRate notifications.
             m_reportFpsTimer.connect(std::bind(&FrameRateImplementation::onReportFpsTimer, this));
         }
 
         FrameRateImplementation::~FrameRateImplementation()
         {
+#ifdef USE_DEVICESETTING_PLUGIN
+            {
+                auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+                if (vd != nullptr) {
+                    vd->Unregister(&_notification);
+                    vd->Release();
+                }
+            }
+            DeviceSettingsClientHelper::Close();
+#else
             device::Host::getInstance().UnRegister(this);
+#endif
             //Stop the timer if running
             if (m_reportFpsTimer.isActive())
             {
@@ -192,6 +212,60 @@ namespace WPEFramework
             return status;
         }
 
+#ifdef USE_DEVICESETTING_PLUGIN
+        /**
+         * @brief Called by the proxy plugin (FrameRate) after Root<>() to pass IShell.
+         *        Opens the DeviceSettings COM-RPC link. Operational(true) will fire
+         *        asynchronously (or synchronously if DeviceSettings is already running),
+         *        which triggers OnDeviceSettingsActivated().
+         */
+        uint32_t FrameRateImplementation::Configure(PluginHost::IShell* service)
+        {
+            LOGINFO("FrameRateImplementation::Configure - opening DeviceSettings COM-RPC link (root IDeviceSettings)");
+            uint32_t result = DeviceSettingsClientHelper::Open(service);
+            if (result != Core::ERROR_NONE) {
+                LOGERR("Failed to open DeviceSettings link: %u", result);
+            }
+            return result;
+        }
+
+        /**
+         * @brief Called by DeviceSettingsClientHelper when DeviceSettings plugin activates
+         *        (or re-activates after a restart). Acquires the video device handle and
+         *        registers for framerate change events.
+         */
+        void FrameRateImplementation::OnDeviceSettingsActivated()
+        {
+            LOGINFO("FrameRateImplementation::OnDeviceSettingsActivated - registering video device events");
+            // Obtain IDeviceSettingsVideoDevice via QueryInterface on root IDeviceSettings
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd != nullptr) {
+                int32_t handle = -1;
+                Core::hresult rc = vd->GetVideoDeviceHandle(0, handle);
+                if (rc == Core::ERROR_NONE) {
+                    _videoDeviceHandle = handle;
+                    LOGINFO("VideoDevice handle acquired: %d", _videoDeviceHandle);
+                } else {
+                    LOGERR("GetVideoDeviceHandle failed: %u", rc);
+                }
+                vd->Register(&_notification);   // subscribe to OnDisplayFrameratePreChange / PostChange
+                vd->Release();
+            } else {
+                LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoDevice not available");
+            }
+        }
+
+        /**
+         * @brief Called by DeviceSettingsClientHelper when DeviceSettings plugin deactivates.
+         *        Invalidates the cached handle — do NOT call interface methods here.
+         */
+        void FrameRateImplementation::OnDeviceSettingsDeactivated()
+        {
+            LOGINFO("FrameRateImplementation::OnDeviceSettingsDeactivated - invalidating video device handle");
+            _videoDeviceHandle = -1;
+        }
+#endif
+
         /***************************************** Methods **********************************************/
 
         /**
@@ -207,6 +281,27 @@ namespace WPEFramework
 
             std::lock_guard<std::mutex> guard(m_callMutex);
 
+#ifdef USE_DEVICESETTING_PLUGIN
+            if (_videoDeviceHandle < 0) {
+                LOGERR("GetDisplayFrameRate: DeviceSettings not available");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd == nullptr) {
+                LOGERR("GetDisplayFrameRate: IDeviceSettingsVideoDevice unavailable");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            string fr;
+            Core::hresult result = vd->GetCurrentDisplayFrameRate(_videoDeviceHandle, fr);
+            vd->Release();
+            if (result == Core::ERROR_NONE) {
+                framerate = fr;
+                success = true;
+            } else {
+                LOGERR("GetCurrentDisplayFrameRate COM-RPC failed: %u", result);
+            }
+            return result;
+#else
             try
             {
                 device::List<device::VideoDevice> videoDevices = device::Host::getInstance().getVideoDevices();
@@ -243,6 +338,7 @@ namespace WPEFramework
             }
 
             return Core::ERROR_GENERAL;
+#endif
         }
 
         /**
@@ -257,6 +353,28 @@ namespace WPEFramework
             std::lock_guard<std::mutex> guard(m_callMutex);
 
             success = false;
+#ifdef USE_DEVICESETTING_PLUGIN
+            if (_videoDeviceHandle < 0) {
+                LOGERR("GetFrmMode: DeviceSettings not available");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd == nullptr) {
+                LOGERR("GetFrmMode: IDeviceSettingsVideoDevice unavailable");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            int32_t frfmode = 0;
+            Core::hresult result = vd->GetFRFMode(_videoDeviceHandle, frfmode);
+            vd->Release();
+            if (result == Core::ERROR_NONE) {
+                autoFRMMode = static_cast<int>(frfmode);
+                DBGINFO("Frame Mode: %d", autoFRMMode);
+                success = true;
+            } else {
+                LOGERR("GetFRFMode COM-RPC failed: %u", result);
+            }
+            return result;
+#else
             try
             {
                 device::List<device::VideoDevice> videoDevices = device::Host::getInstance().getVideoDevices();
@@ -289,6 +407,7 @@ namespace WPEFramework
                 success = false;
             }
             return Core::ERROR_GENERAL;
+#endif
         }
 
         /**
@@ -343,6 +462,24 @@ namespace WPEFramework
             string sFramerate = framerate;
             std::lock_guard<std::mutex> guard(m_callMutex);
 
+#ifdef USE_DEVICESETTING_PLUGIN
+            if (_videoDeviceHandle < 0) {
+                LOGERR("SetDisplayFrameRate: DeviceSettings not available");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd == nullptr) {
+                LOGERR("SetDisplayFrameRate: IDeviceSettingsVideoDevice unavailable");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            Core::hresult result = vd->SetDisplayFrameRate(_videoDeviceHandle, sFramerate);
+            vd->Release();
+            success = (result == Core::ERROR_NONE);
+            if (!success) {
+                LOGERR("SetDisplayFrameRate COM-RPC failed: %u", result);
+            }
+            return result;
+#else
             try
             {
                 device::List<device::VideoDevice> videoDevices = device::Host::getInstance().getVideoDevices();
@@ -374,6 +511,7 @@ namespace WPEFramework
                 success = false;
             }
             return Core::ERROR_GENERAL;
+#endif
         }
 
         /**
@@ -393,6 +531,24 @@ namespace WPEFramework
 
             std::lock_guard<std::mutex> guard(m_callMutex);
 
+#ifdef USE_DEVICESETTING_PLUGIN
+            if (_videoDeviceHandle < 0) {
+                LOGERR("SetFrmMode: DeviceSettings not available");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd == nullptr) {
+                LOGERR("SetFrmMode: IDeviceSettingsVideoDevice unavailable");
+                return Core::ERROR_UNAVAILABLE;
+            }
+            Core::hresult result = vd->SetFRFMode(_videoDeviceHandle, static_cast<int32_t>(frmmode));
+            vd->Release();
+            success = (result == Core::ERROR_NONE);
+            if (!success) {
+                LOGERR("SetFRFMode COM-RPC failed: %u", result);
+            }
+            return result;
+#else
             try
             {
                 device::List<device::VideoDevice> videoDevices = device::Host::getInstance().getVideoDevices();
@@ -424,6 +580,7 @@ namespace WPEFramework
                 success = false;
             }
             return Core::ERROR_GENERAL;
+#endif
         }
 
         /**

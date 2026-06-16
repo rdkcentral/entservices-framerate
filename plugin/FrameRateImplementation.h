@@ -31,15 +31,30 @@
 #include "tracing/Logging.h"
 
 #include "tptimer.h"
-#include "libIARM.h"
 
+#ifndef USE_DEVICESETTING_PLUGIN
+#include "libIARM.h"
 /* Display Events from libds Library */
 #include "dsTypes.h"
 #include "host.hpp"
+#else
+#include <interfaces/IConfiguration.h>
+#include "DeviceSettingsInterface.h"
+#endif
 
 namespace WPEFramework {
     namespace Plugin {
-        class FrameRateImplementation : public Exchange::IFrameRate, public device::Host::IVideoDeviceEvents {
+        class FrameRateImplementation
+            : public Exchange::IFrameRate
+#ifdef USE_DEVICESETTING_PLUGIN
+            , public Exchange::IConfiguration
+            , public DeviceSettingsClientHelper          // root IDeviceSettings COM-RPC (single connection)
+            // NOTE: IDeviceSettingsVideoDevice::INotification is NOT inherited directly.
+            //       Framerate events are received via the inner Notification delegate class.
+#else
+            , public device::Host::IVideoDeviceEvents
+#endif
+        {
 
             public:
                 // We do not allow this plugin to be copied !!
@@ -48,12 +63,23 @@ namespace WPEFramework {
 
                 static FrameRateImplementation* instance(FrameRateImplementation *FrameRateImpl = nullptr);
 
+#ifdef USE_DEVICESETTING_PLUGIN
+                // Called by the proxy plugin via IConfiguration after Root<>() to pass IShell.
+                // Opens the DeviceSettings COM-RPC link (DeviceSettingsVideoDeviceHelper::Open).
+                uint32_t Configure(PluginHost::IShell* service) override;
+#endif
+
                 // We do not allow this plugin to be copied !!
                 FrameRateImplementation(const FrameRateImplementation&) = delete;
                 FrameRateImplementation& operator=(const FrameRateImplementation&) = delete;
 
                 BEGIN_INTERFACE_MAP(FrameRateImplementation)
                     INTERFACE_ENTRY(Exchange::IFrameRate)
+#ifdef USE_DEVICESETTING_PLUGIN
+                    INTERFACE_ENTRY(Exchange::IConfiguration)
+                    // IDeviceSettingsVideoDevice::INotification lives on inner Notification class,
+                    // not on FrameRateImplementation itself.
+#endif
                 END_INTERFACE_MAP
 
             public:
@@ -147,13 +173,54 @@ namespace WPEFramework {
                 TpTimer m_reportFpsTimer;
                 int m_lastFpsValue;
                 std::mutex m_callMutex;
+#ifdef USE_DEVICESETTING_PLUGIN
+                /**
+                 * @brief Notification delegate for IDeviceSettingsVideoDevice::INotification.
+                 *
+                 * Decouples FrameRateImplementation from COM-RPC sub-interface event types.
+                 * Register &_notification with vd->Register() — not 'this'.
+                 * Callbacks delegate to the private helpers on FrameRateImplementation.
+                 *
+                 * MIGRATION PATTERN: Apply this same inner Notification class to all future
+                 * client plugins that use DeviceSettingsClientHelper.
+                 */
+                class Notification : public Exchange::IDeviceSettingsVideoDevice::INotification {
+                public:
+                    explicit Notification(FrameRateImplementation& parent) : _parent(parent) {}
+                    Notification(const Notification&) = delete;
+                    Notification& operator=(const Notification&) = delete;
+
+                    void OnDisplayFrameratePreChange(const string& frameRate) override {
+                        _parent.OnDisplayFrameratePreChange(frameRate);
+                    }
+                    void OnDisplayFrameratePostChange(const string& frameRate) override {
+                        _parent.OnDisplayFrameratePostChange(frameRate);
+                    }
+
+                    BEGIN_INTERFACE_MAP(Notification)
+                        INTERFACE_ENTRY(Exchange::IDeviceSettingsVideoDevice::INotification)
+                    END_INTERFACE_MAP
+
+                private:
+                    FrameRateImplementation& _parent;
+                };
+
+                int32_t _videoDeviceHandle { -1 };    // Cached from GetVideoDeviceHandle(); -1 = unavailable
+                Notification _notification { *this }; // COM-RPC event delegate — register this, not 'this'
+                void OnDeviceSettingsActivated() override;
+                void OnDeviceSettingsDeactivated() override;
+                // Private helpers — called from Notification inner class
+                void OnDisplayFrameratePreChange(const std::string& frameRate);
+                void OnDisplayFrameratePostChange(const std::string& frameRate);
+#endif
                 friend class Job;
 
+#ifndef USE_DEVICESETTING_PLUGIN
             public:
-
-                /* VideoDeviceEventNotification*/
+                /* VideoDeviceEventNotification — libds path (pre-change / post-change) */
                 void OnDisplayFrameratePreChange(const std::string& frameRate) override;
                 void OnDisplayFrameratePostChange(const std::string& frameRate) override;
+#endif
         };
     } // namespace Plugin
 } // namespace WPEFramework
