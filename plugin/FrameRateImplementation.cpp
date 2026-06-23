@@ -65,11 +65,14 @@ namespace WPEFramework
               , m_numberOfFpsUpdates(0)
               , m_fpsCollectionInProgress(false)
               , m_lastFpsValue(0)
+#ifdef USE_DEVICESETTING_PLUGIN
+              , _DSVideoDeviceNotification(*this)
+#endif
         {
             // Coverity Fix: ID 580 - Uninitialized pointer field
             FrameRateImplementation::_instance = this;
 #ifdef USE_DEVICESETTING_PLUGIN
-            // _videoDeviceHandle and _notification are initialised in-class
+            // _videoDeviceHandle is initialised in-class; _DSVideoDeviceNotification initialised in member init list
 #else
             device::Host::getInstance().Register(this, "WPE::FrameRate");
 #endif
@@ -83,7 +86,7 @@ namespace WPEFramework
             {
                 auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
                 if (vd != nullptr) {
-                    vd->Unregister(&_notification);
+                    vd->Unregister(&_DSVideoDeviceNotification);
                     vd->Release();
                 }
             }
@@ -248,7 +251,7 @@ namespace WPEFramework
                 } else {
                     LOGERR("GetVideoDeviceHandle failed: %u", rc);
                 }
-                vd->Register(&_notification);   // subscribe to OnDisplayFrameratePreChange / PostChange
+                vd->Register(&_DSVideoDeviceNotification);   // subscribe to OnDisplayFrameratePreChange / PostChange
                 vd->Release();
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoDevice not available");

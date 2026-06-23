@@ -178,17 +178,17 @@ namespace WPEFramework {
                  * @brief Notification delegate for IDeviceSettingsVideoDevice::INotification.
                  *
                  * Decouples FrameRateImplementation from COM-RPC sub-interface event types.
-                 * Register &_notification with vd->Register() — not 'this'.
+                 * Register &_DSVideoDeviceNotification with vd->Register() — not 'this'.
                  * Callbacks delegate to the private helpers on FrameRateImplementation.
                  *
-                 * MIGRATION PATTERN: Apply this same inner Notification class to all future
+                 * MIGRATION PATTERN: Apply this same inner DSVideoDeviceNotification class to all future
                  * client plugins that use DeviceSettingsClientHelper.
                  */
-                class Notification : public Exchange::IDeviceSettingsVideoDevice::INotification {
+                class DSVideoDeviceNotification : public Exchange::IDeviceSettingsVideoDevice::INotification {
                 public:
-                    explicit Notification(FrameRateImplementation& parent) : _parent(parent) {}
-                    Notification(const Notification&) = delete;
-                    Notification& operator=(const Notification&) = delete;
+                    explicit DSVideoDeviceNotification(FrameRateImplementation& parent) : _parent(parent) {}
+                    DSVideoDeviceNotification(const DSVideoDeviceNotification&) = delete;
+                    DSVideoDeviceNotification& operator=(const DSVideoDeviceNotification&) = delete;
 
                     void OnDisplayFrameratePreChange(const string& frameRate) override {
                         _parent.OnDisplayFrameratePreChange(frameRate);
@@ -197,7 +197,7 @@ namespace WPEFramework {
                         _parent.OnDisplayFrameratePostChange(frameRate);
                     }
 
-                    BEGIN_INTERFACE_MAP(Notification)
+                    BEGIN_INTERFACE_MAP(DSVideoDeviceNotification)
                         INTERFACE_ENTRY(Exchange::IDeviceSettingsVideoDevice::INotification)
                     END_INTERFACE_MAP
 
@@ -206,7 +206,7 @@ namespace WPEFramework {
                 };
 
                 int32_t _videoDeviceHandle { -1 };    // Cached from GetVideoDeviceHandle(); -1 = unavailable
-                Notification _notification { *this }; // COM-RPC event delegate — register this, not 'this'
+                Core::Sink<DSVideoDeviceNotification> _DSVideoDeviceNotification; // COM-RPC event delegate — initialized in constructor with *this
                 void OnDeviceSettingsActivated() override;
                 void OnDeviceSettingsDeactivated() override;
                 // Private helpers — called from Notification inner class
