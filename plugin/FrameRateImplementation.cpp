@@ -427,18 +427,10 @@ namespace WPEFramework
             }
 
             std::lock_guard<std::mutex> guard(m_callMutex);
-            try
-            {
-                m_fpsCollectionFrequencyInMs = frequency;
-                DBGINFO("FrameRate collection frequency set to %d milliseconds.", frequency);
-                success = true;
-                return Core::ERROR_NONE;
-            }
-            catch (const device::Exception& err)
-            {
-                LOG_DEVICE_EXCEPTION0();
-            }
-            return Core::ERROR_GENERAL;
+            m_fpsCollectionFrequencyInMs = frequency;
+            DBGINFO("FrameRate collection frequency set to %d milliseconds.", frequency);
+            success = true;
+            return Core::ERROR_NONE;
         }
 
         /**

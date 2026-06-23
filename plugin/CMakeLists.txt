@@ -38,14 +38,7 @@ option(USE_DEVICESETTING_PLUGIN
 
 if (USE_DEVICESETTING_PLUGIN)
     add_definitions(-DUSE_DEVICESETTING_PLUGIN)
-    # Resolve path to entservices-devicesettings/helpers (DeviceSettingsClientHelper.h,
-    # DeviceSettingsInterface.h). Can be overridden via -DDEVICESETTINGS_HELPERS_DIR=...
-    if (NOT DEVICESETTINGS_HELPERS_DIR)
-        set(DEVICESETTINGS_HELPERS_DIR
-            "${CMAKE_CURRENT_SOURCE_DIR}/../../entservices-devicesettings/helpers"
-            CACHE PATH "Path to entservices-devicesettings/helpers directory")
-    endif()
-    message(STATUS "FrameRate: USE_DEVICESETTING_PLUGIN=ON  helpers=${DEVICESETTINGS_HELPERS_DIR}")
+    message(STATUS "FrameRate: USE_DEVICESETTING_PLUGIN=ON  (helpers from entservices-helpers)")
 endif()
 
 add_library(${MODULE_NAME} SHARED
@@ -90,8 +83,8 @@ if(PROCPS_LIBRARIES)
 endif(PROCPS_LIBRARIES)
 
 if (USE_DEVICESETTING_PLUGIN)
-    # Add helpers dir so FrameRateImplementation.cpp can find DeviceSettingsInterface.h
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${DEVICESETTINGS_HELPERS_DIR})
+    # DeviceSettingsClientHelper.h / DeviceSettingsInterface.h are now in entservices-helpers
+    # and are found automatically via the ${NAMESPACE}::${NAMESPACE}Helpers include path.
     # IDeviceSettingsVideoDevice.h and IConfiguration.h come from ${NAMESPACE}Definitions (already linked)
 else ()
     # Legacy path: IARMBus + libds linkage
