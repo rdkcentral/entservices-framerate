@@ -38,7 +38,10 @@ option(USE_DEVICESETTING_PLUGIN
 
 if (USE_DEVICESETTING_PLUGIN)
     add_definitions(-DUSE_DEVICESETTING_PLUGIN)
+    set(IMPL_DIR DS_COMRPC)
     message(STATUS "FrameRate: USE_DEVICESETTING_PLUGIN=ON  (helpers from entservices-helpers)")
+else()
+    set(IMPL_DIR DS_IARM)
 endif()
 
 add_library(${MODULE_NAME} SHARED
@@ -60,7 +63,7 @@ install(TARGETS ${MODULE_NAME}
     DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${STORAGE_DIRECTORY}/plugins)
 
 add_library(${PLUGIN_IMPLEMENTATION} SHARED
-    FrameRateImplementation.cpp
+    ${IMPL_DIR}/FrameRateImplementation.cpp
     Module.cpp)
 
 set_target_properties(${PLUGIN_IMPLEMENTATION} PROPERTIES
