@@ -189,7 +189,7 @@ namespace WPEFramework {
                     FrameRateImplementation& _parent;
                 };
 
-                int32_t _videoDeviceHandle { -1 };    // Cached from GetVideoDeviceHandle(); -1 = unavailable
+                // _videoDeviceHandle is inherited from DeviceSettingsClientHelper (base class)
                 Core::Sink<DSVideoDeviceNotification> _DSVideoDeviceNotification; // COM-RPC event delegate — initialized in constructor with *this
                 void OnDeviceSettingsActivated() override;
                 void OnDeviceSettingsDeactivated() override;

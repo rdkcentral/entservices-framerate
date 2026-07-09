@@ -230,7 +230,7 @@ namespace WPEFramework
             // Obtain IDeviceSettingsVideoDevice via QueryInterface on root IDeviceSettings
             auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
-                int32_t handle = -1;
+                int32_t handle = INVALID_DS_HANDLE;
                 Core::hresult rc = vd->GetVideoDeviceHandle(0, handle);
                 if (rc == Core::ERROR_NONE) {
                     _videoDeviceHandle = handle;
@@ -252,7 +252,7 @@ namespace WPEFramework
         void FrameRateImplementation::OnDeviceSettingsDeactivated()
         {
             LOGINFO("FrameRateImplementation::OnDeviceSettingsDeactivated - invalidating video device handle");
-            _videoDeviceHandle = -1;
+            _videoDeviceHandle = INVALID_DS_HANDLE;
         }
 
         /***************************************** Methods **********************************************/
