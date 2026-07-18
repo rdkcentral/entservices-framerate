@@ -70,13 +70,13 @@ namespace WPEFramework
         FrameRateImplementation::~FrameRateImplementation()
         {
             {
-                auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+                auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
                 if (vd != nullptr) {
                     vd->Unregister(&_DSVideoDeviceNotification);
                     vd->Release();
                 }
             }
-            DeviceSettingsClientHelper::Close();
+            DSHelper::Close();
             //Stop the timer if running
             if (m_reportFpsTimer.isActive())
             {
@@ -212,7 +212,7 @@ namespace WPEFramework
         uint32_t FrameRateImplementation::Configure(PluginHost::IShell* service)
         {
             LOGINFO("FrameRateImplementation::Configure - opening DeviceSettings COM-RPC link (root IDeviceSettings)");
-            uint32_t result = DeviceSettingsClientHelper::Open(service);
+            uint32_t result = DSHelper::Open(service);
             if (result != Core::ERROR_NONE) {
                 LOGERR("Failed to open DeviceSettings link: %u", result);
             }
@@ -227,11 +227,11 @@ namespace WPEFramework
         void FrameRateImplementation::OnDeviceSettingsActivated()
         {
             LOGINFO("FrameRateImplementation::OnDeviceSettingsActivated - registering video device events");
-            // Load video device config — auto-populates _videoDeviceHandles[0] via LoadVideoDeviceConfig()
-            LoadVideoDeviceConfig(_vdConfigStore);
-            LOGINFO("VideoDevice handle acquired: %d", getCachedVideoDeviceHandle(0));
+            // Config is loaded lazily by DSHelper::_ensureConfigLoaded() on the first accessor call.
+            // No explicit LoadVideoDeviceConfig call needed here.
+            LOGINFO("VideoDevice handle: %d", DSHelper::getCachedVideoDeviceHandle(0));
             // Subscribe to framerate change events
-            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
                 vd->Register(&_DSVideoDeviceNotification);   // subscribe to OnDisplayFrameratePreChange / PostChange
                 vd->Release();
@@ -246,8 +246,8 @@ namespace WPEFramework
          */
         void FrameRateImplementation::OnDeviceSettingsDeactivated()
         {
-            LOGINFO("FrameRateImplementation::OnDeviceSettingsDeactivated - base class will clear cached handles");
-            // _videoDeviceHandles cleared by base DeviceSettingsClientHelper::Operational(false)
+            LOGINFO("FrameRateImplementation::OnDeviceSettingsDeactivated - DSHelper will clear cached handles");
+            // _videoDeviceHandles cleared by DSHelper::Operational(false)
         }
 
         /***************************************** Methods **********************************************/
@@ -265,17 +265,17 @@ namespace WPEFramework
 
             std::lock_guard<std::mutex> guard(m_callMutex);
 
-            if (getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
+            if (DSHelper::getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
                 LOGERR("GetDisplayFrameRate: DeviceSettings not available");
                 return Core::ERROR_UNAVAILABLE;
             }
-            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd == nullptr) {
                 LOGERR("GetDisplayFrameRate: IDeviceSettingsVideoDevice unavailable");
                 return Core::ERROR_UNAVAILABLE;
             }
             string fr;
-            Core::hresult result = vd->GetCurrentDisplayFrameRate(getCachedVideoDeviceHandle(0), fr);
+            Core::hresult result = vd->GetCurrentDisplayFrameRate(DSHelper::getCachedVideoDeviceHandle(0), fr);
             vd->Release();
             if (result == Core::ERROR_NONE) {
                 framerate = fr;
@@ -298,17 +298,17 @@ namespace WPEFramework
             std::lock_guard<std::mutex> guard(m_callMutex);
 
             success = false;
-            if (getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
+            if (DSHelper::getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
                 LOGERR("GetFrmMode: DeviceSettings not available");
                 return Core::ERROR_UNAVAILABLE;
             }
-            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd == nullptr) {
                 LOGERR("GetFrmMode: IDeviceSettingsVideoDevice unavailable");
                 return Core::ERROR_UNAVAILABLE;
             }
             int32_t frfmode = 0;
-            Core::hresult result = vd->GetFRFMode(getCachedVideoDeviceHandle(0), frfmode);
+            Core::hresult result = vd->GetFRFMode(DSHelper::getCachedVideoDeviceHandle(0), frfmode);
             vd->Release();
             if (result == Core::ERROR_NONE) {
                 autoFRMMode = static_cast<int>(frfmode);
@@ -364,16 +364,16 @@ namespace WPEFramework
             string sFramerate = framerate;
             std::lock_guard<std::mutex> guard(m_callMutex);
 
-            if (getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
+            if (DSHelper::getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
                 LOGERR("SetDisplayFrameRate: DeviceSettings not available");
                 return Core::ERROR_UNAVAILABLE;
             }
-            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd == nullptr) {
                 LOGERR("SetDisplayFrameRate: IDeviceSettingsVideoDevice unavailable");
                 return Core::ERROR_UNAVAILABLE;
             }
-            Core::hresult result = vd->SetDisplayFrameRate(getCachedVideoDeviceHandle(0), sFramerate);
+            Core::hresult result = vd->SetDisplayFrameRate(DSHelper::getCachedVideoDeviceHandle(0), sFramerate);
             vd->Release();
             success = (result == Core::ERROR_NONE);
             if (!success) {
@@ -399,16 +399,16 @@ namespace WPEFramework
 
             std::lock_guard<std::mutex> guard(m_callMutex);
 
-            if (getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
+            if (DSHelper::getCachedVideoDeviceHandle(0) == INVALID_DS_HANDLE) {
                 LOGERR("SetFrmMode: DeviceSettings not available");
                 return Core::ERROR_UNAVAILABLE;
             }
-            auto* vd = AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd == nullptr) {
                 LOGERR("SetFrmMode: IDeviceSettingsVideoDevice unavailable");
                 return Core::ERROR_UNAVAILABLE;
             }
-            Core::hresult result = vd->SetFRFMode(getCachedVideoDeviceHandle(0), static_cast<int32_t>(frmmode));
+            Core::hresult result = vd->SetFRFMode(DSHelper::getCachedVideoDeviceHandle(0), static_cast<int32_t>(frmmode));
             vd->Release();
             success = (result == Core::ERROR_NONE);
             if (!success) {

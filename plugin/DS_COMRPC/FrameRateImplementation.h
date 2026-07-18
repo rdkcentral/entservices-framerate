@@ -40,7 +40,7 @@ namespace WPEFramework {
         class FrameRateImplementation
             : public Exchange::IFrameRate
             , public Exchange::IConfiguration
-            , public DeviceSettingsClientHelper          // root IDeviceSettings COM-RPC (single connection)
+            , public DSHelper               // root IDeviceSettings COM-RPC (single connection)
             // NOTE: IDeviceSettingsVideoDevice::INotification is NOT inherited directly.
             //       Framerate events are received via the inner Notification delegate class.
         {
@@ -189,7 +189,8 @@ namespace WPEFramework {
                     FrameRateImplementation& _parent;
                 };
 
-                // _videoDeviceHandle is inherited from DeviceSettingsClientHelper (base class)
+                // Video device handle is managed by DSHelper (private _videoDeviceHandles).
+                // Access via DSHelper::getCachedVideoDeviceHandle(0).
                 Core::Sink<DSVideoDeviceNotification> _DSVideoDeviceNotification; // COM-RPC event delegate — initialized in constructor with *this
                 void OnDeviceSettingsActivated() override;
                 void OnDeviceSettingsDeactivated() override;
