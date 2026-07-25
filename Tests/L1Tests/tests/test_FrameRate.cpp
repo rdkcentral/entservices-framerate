@@ -218,9 +218,9 @@ class L1FrameRateNotificationHandler : public Exchange::IFrameRate::INotificatio
         L1FrameRateNotificationHandler() : m_event_signalled(0), m_lastAverage(0), m_lastMin(0), m_lastMax(0), m_refCount(1) {}
         ~L1FrameRateNotificationHandler() {}
 
-        void AddRef() const override
+        uint32_t AddRef() const override
         {
-            Core::InterlockedIncrement(m_refCount);
+            return Core::InterlockedIncrement(m_refCount);
         }
 
         uint32_t Release() const override
