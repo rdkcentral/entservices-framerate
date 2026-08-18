@@ -105,7 +105,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: 2.0.0
+          ref: feature/RDKEMW-23071-Thunder
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
@@ -620,7 +620,7 @@ jobs:
           '*/install/usr/include/*'
           '*/Tests/headers/*'
           '*/Tests/mocks/*'
-          # '*/Tests/L2Tests/*' // Disabling it as there is no L2 test running
+          '*/Tests/L2Tests/*'
           '*/googlemock/*'
           '*/googletest/*'
           '*/sqlite/*'
