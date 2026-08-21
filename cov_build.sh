@@ -69,7 +69,7 @@ cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-framerate \
 -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog \
 -DENABLE_TELEMETRY_LOGGING -DUSE_IARMBUS \
 -DUSE_DRM_SCREENCAPTURE -DHAS_API_SYSTEM \
--DHAS_RBUS -DDISABLE_SECURITY_TOKEN -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
+-DHAS_RBUS -DDISABLE_SECURITY_TOKEN  -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
 
 cmake --build build/entservices-framerate --target install
 echo "======================================================================================"
