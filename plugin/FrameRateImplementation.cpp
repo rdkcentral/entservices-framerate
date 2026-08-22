@@ -17,6 +17,7 @@
  * limitations under the License.
  **/
 
+
 #include <stdlib.h>
 #include <errno.h>
 #include <string>
@@ -42,6 +43,7 @@
 #else
 #define DBGINFO(fmt, ...)
 #endif
+
 
 namespace WPEFramework
 {
