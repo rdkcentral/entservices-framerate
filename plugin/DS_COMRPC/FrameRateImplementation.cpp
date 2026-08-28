@@ -212,7 +212,7 @@ namespace WPEFramework
         uint32_t FrameRateImplementation::Configure(PluginHost::IShell* service)
         {
             LOGINFO("FrameRateImplementation::Configure - opening DeviceSettings COM-RPC link (root IDeviceSettings)");
-            uint32_t result = DSHelper::Open(service);
+            uint32_t result = DSHelper::Open(service, "FrameRate");
             if (result != Core::ERROR_NONE) {
                 LOGERR("Failed to open DeviceSettings link: %u", result);
             }
