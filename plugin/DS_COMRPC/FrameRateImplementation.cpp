@@ -233,7 +233,7 @@ namespace WPEFramework
             // Subscribe to framerate change events
             auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
-                vd->Register(&_DSVideoDeviceNotification);   // subscribe to OnDisplayFrameratePreChange / PostChange
+                vd->Register("FrameRate", &_DSVideoDeviceNotification);   // subscribe to OnDisplayFrameratePreChange / PostChange
                 vd->Release();
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsVideoDevice not available");
