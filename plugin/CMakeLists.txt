@@ -28,6 +28,22 @@ find_package(CompileSettingsDebug CONFIG REQUIRED)
 find_package(${NAMESPACE}Helpers REQUIRED)
 find_library(PROCPS_LIBRARIES NAMES procps)
 
+# -----------------------------------------------------------------
+# USE_DEVICESETTING_PLUGIN: use DeviceSettings Thunder plugin via
+# COM-RPC instead of libds/IARM for FrameRate.
+# Enable at configure time: cmake -DUSE_DEVICESETTING_PLUGIN=ON
+# -----------------------------------------------------------------
+option(USE_DEVICESETTING_PLUGIN
+    "Use DeviceSettings COM-RPC plugin instead of libds/IARM for FrameRate" OFF)
+
+if (USE_DEVICESETTING_PLUGIN)
+    add_definitions(-DUSE_DEVICESETTING_PLUGIN)
+    set(IMPL_DIR DS_COMRPC)
+    message(STATUS "FrameRate: USE_DEVICESETTING_PLUGIN=ON  (helpers from entservices-helpers)")
+else()
+    set(IMPL_DIR DS_IARM)
+endif()
+
 add_library(${MODULE_NAME} SHARED
     FrameRate.cpp
     Module.cpp)
@@ -47,7 +63,7 @@ install(TARGETS ${MODULE_NAME}
     DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${STORAGE_DIRECTORY}/plugins)
 
 add_library(${PLUGIN_IMPLEMENTATION} SHARED
-    FrameRateImplementation.cpp
+    ${IMPL_DIR}/FrameRateImplementation.cpp
     Module.cpp)
 
 set_target_properties(${PLUGIN_IMPLEMENTATION} PROPERTIES
@@ -69,27 +85,34 @@ if(PROCPS_LIBRARIES)
     target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${PROCPS_LIBRARIES})
 endif(PROCPS_LIBRARIES)
 
-# TODO: fix this logical issue at else case with IARMBus
-find_package(IARMBus)
-if (IARMBus_FOUND)
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${IARMBUS_INCLUDE_DIRS})
-    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES})
-else (IARMBus_FOUND)
-    message ("Module IARMBus required.")
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${IARMBUS_INCLUDE_DIRS})
-    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES})
-endif(IARMBus_FOUND)
-
-find_package(DS)
-if (DS_FOUND)
-    add_definitions(-DDS_FOUND)
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${DS_INCLUDE_DIRS})
-    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${DS_LIBRARIES})
-    target_include_directories(${MODULE_NAME} PRIVATE ${DS_INCLUDE_DIRS})
-    target_link_libraries(${MODULE_NAME} PRIVATE ${DS_LIBRARIES})
+if (USE_DEVICESETTING_PLUGIN)
+    # DeviceSettingsClientHelper.h / DeviceSettingsInterface.h are now in entservices-helpers
+    # and are found automatically via the ${NAMESPACE}::${NAMESPACE}Helpers include path.
+    # IDeviceSettingsVideoDevice.h and IConfiguration.h come from ${NAMESPACE}Definitions (already linked)
 else ()
-    message(FATAL_ERROR "Failed to find required DS package.")
-endif ()
+    # Legacy path: IARMBus + libds linkage
+    # TODO: fix this logical issue at else case with IARMBus
+    find_package(IARMBus)
+    if (IARMBus_FOUND)
+        target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${IARMBUS_INCLUDE_DIRS})
+        target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES})
+    else (IARMBus_FOUND)
+        message ("Module IARMBus required.")
+        target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${IARMBUS_INCLUDE_DIRS})
+        target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES})
+    endif(IARMBus_FOUND)
+
+    find_package(DS)
+    if (DS_FOUND)
+        add_definitions(-DDS_FOUND)
+        target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${DS_INCLUDE_DIRS})
+        target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${DS_LIBRARIES})
+        target_include_directories(${MODULE_NAME} PRIVATE ${DS_INCLUDE_DIRS})
+        target_link_libraries(${MODULE_NAME} PRIVATE ${DS_LIBRARIES})
+    else ()
+        message(FATAL_ERROR "Failed to find required DS package.")
+    endif ()
+endif (USE_DEVICESETTING_PLUGIN)
 
 target_link_libraries(${PLUGIN_IMPLEMENTATION}
     PRIVATE

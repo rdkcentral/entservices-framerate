@@ -19,7 +19,12 @@
 
 #include <exception>
 #include "FrameRate.h"
+#ifndef USE_DEVICESETTING_PLUGIN
 #include "manager.hpp"
+#endif
+#ifdef USE_DEVICESETTING_PLUGIN
+#include <interfaces/IConfiguration.h>
+#endif
 #include "UtilsJsonRpc.h"
 
 #define API_VERSION_NUMBER_MAJOR 1
@@ -73,6 +78,7 @@ namespace WPEFramework
 
             SYSLOG(Logging::Startup, (_T("FrameRate::Initialize: PID=%u"), getpid()));
 
+#ifndef USE_DEVICESETTING_PLUGIN
             try
             {
                 device::Manager::Initialize();
@@ -82,6 +88,7 @@ namespace WPEFramework
             {
                 LOGERR("device::Manager::Initialize failed, Exception: {%s}", e.what());
             }
+#endif
 
             _service = service;
             _service->AddRef();
@@ -90,6 +97,17 @@ namespace WPEFramework
 
             if (nullptr != _FrameRate)
             {
+#ifdef USE_DEVICESETTING_PLUGIN
+                // Pass IShell to FrameRateImplementation so it can open the DeviceSettings
+                // COM-RPC link. FrameRateImplementation exposes IConfiguration for this purpose.
+                Exchange::IConfiguration* config = _FrameRate->QueryInterface<Exchange::IConfiguration>();
+                if (config != nullptr) {
+                    config->Configure(_service);
+                    config->Release();
+                } else {
+                    LOGERR("FrameRate::Initialize: IConfiguration not found on FrameRateImplementation");
+                }
+#endif
                 // Register for notifications
                 _FrameRate->Register(&_FrameRateNotification);
                 // Invoking Plugin API register to wpeframework
@@ -154,6 +172,7 @@ namespace WPEFramework
             _service->Release();
             _service = nullptr;
 
+#ifndef USE_DEVICESETTING_PLUGIN
             try
             {
                 device::Manager::DeInitialize();
@@ -163,6 +182,7 @@ namespace WPEFramework
             {
                 LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
             }
+#endif
 
             SYSLOG(Logging::Shutdown, (string(_T("FrameRate de-initialised"))));
         }

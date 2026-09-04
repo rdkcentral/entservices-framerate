@@ -21,7 +21,7 @@
 
 #include <mutex>
 
-#include "Module.h"
+#include "../Module.h"
 
 #include <com/com.h>
 #include <core/core.h>
@@ -31,15 +31,18 @@
 #include "tracing/Logging.h"
 
 #include "tptimer.h"
-#include "libIARM.h"
 
+#include "libIARM.h"
 /* Display Events from libds Library */
 #include "dsTypes.h"
 #include "host.hpp"
 
 namespace WPEFramework {
     namespace Plugin {
-        class FrameRateImplementation : public Exchange::IFrameRate, public device::Host::IVideoDeviceEvents {
+        class FrameRateImplementation
+            : public Exchange::IFrameRate
+            , public device::Host::IVideoDeviceEvents
+        {
 
             public:
                 // We do not allow this plugin to be copied !!
@@ -47,6 +50,7 @@ namespace WPEFramework {
                 ~FrameRateImplementation() override;
 
                 static FrameRateImplementation* instance(FrameRateImplementation *FrameRateImpl = nullptr);
+
 
                 // We do not allow this plugin to be copied !!
                 FrameRateImplementation(const FrameRateImplementation&) = delete;
@@ -150,8 +154,7 @@ namespace WPEFramework {
                 friend class Job;
 
             public:
-
-                /* VideoDeviceEventNotification*/
+                /* VideoDeviceEventNotification — libds path (pre-change / post-change) */
                 void OnDisplayFrameratePreChange(const std::string& frameRate) override;
                 void OnDisplayFrameratePostChange(const std::string& frameRate) override;
         };
