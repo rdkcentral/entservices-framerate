@@ -72,16 +72,6 @@ namespace WPEFramework
 
             SYSLOG(Logging::Startup, (_T("FrameRate::Initialize: PID=%u"), getpid()));
 
-            try
-            {
-                device::Manager::Initialize();
-                LOGINFO("device::Manager::Initialize success");
-            }
-            catch(const std::exception& e)
-            {
-                LOGERR("device::Manager::Initialize failed, Exception: {%s}", e.what());
-            }
-
             _service = service;
             _service->AddRef();
             _service->Register(&_FrameRateNotification);
@@ -152,16 +142,6 @@ namespace WPEFramework
             _connectionId = 0;
             _service->Release();
             _service = nullptr;
-
-            try
-            {
-                device::Manager::DeInitialize();
-                LOGINFO("device::Manager::DeInitialize success");
-            }
-            catch(const std::exception& e)
-            {
-                LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
-            }
 
             SYSLOG(Logging::Shutdown, (string(_T("FrameRate de-initialised"))));
         }
