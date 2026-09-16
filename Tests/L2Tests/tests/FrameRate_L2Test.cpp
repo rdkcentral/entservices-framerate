@@ -24,9 +24,14 @@
 #include <mutex>
 #include <condition_variable>
 #include <fstream>
+#include <cstring>
 #include <interfaces/IFrameRate.h>
-#include "devicesettings.h"
-#include "FrontPanelIndicatorMock.h"
+
+// FrameRate now talks to the real org.rdk.DeviceSettings plugin over COM-RPC.
+// DsVideoDeviceHalMock stands in for libds-hal (the dsVideoDevice HAL) so this test
+// can control DeviceSettingsVideoDeviceImplementation's behavior, mirroring how
+// UsbMassStorage's L2 test controls the real UsbDevice plugin via libUSBApiImplMock.
+#include "DsVideoDeviceHalMock.h"
 
 #define JSON_TIMEOUT (1000)
 #define COM_TIMEOUT (100)
@@ -131,7 +136,6 @@ public:
 /* FrameRate L2 test class declaration */
 class FrameRate_L2test : public L2TestMocks {
 protected:
-    IARM_EventHandler_t _iarmDSFramerateEventHandler = nullptr;
     Core::JSONRPC::Message message;
     string response;
 
@@ -139,7 +143,12 @@ protected:
 
 public:
     FrameRate_L2test();
-    device::Host::IVideoDeviceEvents* l_listener;
+    // Captured from DsVideoDeviceHalMock::dsRegisterFrameratePreChangeCB/PostChangeCB —
+    // the raw HAL callbacks DeviceSettingsVideoDeviceImplementation registers, used to
+    // simulate the HAL firing a framerate pre/post change event.
+    dsRegisterFrameratePreChangeCB_t m_dsFrameratePreChangeCB = nullptr;
+    dsRegisterFrameratePostChangeCB_t m_dsFrameratePostChangeCB = nullptr;
+    NiceMock<DsVideoDeviceHalMock> dsVideoDeviceHalMock;
     uint32_t CreateFrameRateInterfaceObjectUsingComRPCConnection();
     void OnFpsEvent(int average, int min, int max);
     void OnDisplayFrameRateChanging(const string &displayFrameRate);
@@ -178,16 +187,33 @@ FrameRate_L2test::FrameRate_L2test()
     uint32_t status = Core::ERROR_GENERAL;
     m_event_signalled = FrameRate_StateInvalid;
 
-    EXPECT_CALL(*p_managerImplMock, Initialize())
-            .Times(::testing::AnyNumber())
-            .WillRepeatedly(::testing::Return());
+    // DsVideoDeviceHalMock stands in for libds-hal so the real DeviceSettings plugin's
+    // dsVideoDevice component reports a single video device at handle 0.
+    DsVideoDeviceHalMock::setImpl(&dsVideoDeviceHalMock);
+    ON_CALL(dsVideoDeviceHalMock, dsVideoDeviceInit()).WillByDefault(::testing::Return(dsERR_NONE));
+    ON_CALL(dsVideoDeviceHalMock, dsVideoDeviceTerm()).WillByDefault(::testing::Return(dsERR_NONE));
+    ON_CALL(dsVideoDeviceHalMock, dsGetVideoDevice(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Invoke(
+            [](int, intptr_t* handle) {
+                if (handle) { *handle = 0; }
+                return dsERR_NONE;
+            }));
+    ON_CALL(dsVideoDeviceHalMock, dsRegisterFrameratePreChangeCB(::testing::_))
+        .WillByDefault(::testing::Invoke(
+            [&](dsRegisterFrameratePreChangeCB_t cbFunc) {
+                m_dsFrameratePreChangeCB = cbFunc;
+                return dsERR_NONE;
+            }));
+    ON_CALL(dsVideoDeviceHalMock, dsRegisterFrameratePostChangeCB(::testing::_))
+        .WillByDefault(::testing::Invoke(
+            [&](dsRegisterFrameratePostChangeCB_t cbFunc) {
+                m_dsFrameratePostChangeCB = cbFunc;
+                return dsERR_NONE;
+            }));
 
-    ON_CALL(*p_hostImplMock, Register(::testing::Matcher<device::Host::IVideoDeviceEvents*>(::testing::_)))
-             .WillByDefault(::testing::Invoke(
-                 [&](device::Host::IVideoDeviceEvents* listener) {
-                    l_listener = listener;
-                    return dsERR_NONE;
-         }));
+    /* Activate the real DeviceSettings plugin so FrameRate's DSHelper can resolve it */
+    status = ActivateService("org.rdk.DeviceSettings");
+    EXPECT_EQ(Core::ERROR_NONE, status);
 
     /* Activate plugin in constructor */
     status = ActivateService("org.rdk.FrameRate");
@@ -220,13 +246,6 @@ FrameRate_L2test::~FrameRate_L2test() {
     uint32_t status = Core::ERROR_GENERAL;
     m_event_signalled = FrameRate_StateInvalid;
 
-    ON_CALL(*p_hostImplMock, UnRegister(::testing::Matcher<device::Host::IVideoDeviceEvents*>(::testing::_)))
-             .WillByDefault(::testing::Invoke(
-                 [&](device::Host::IVideoDeviceEvents* listener) {
-                    l_listener = nullptr;
-                    return dsERR_NONE;
-         }));
-
     if (m_FrameRateplugin) {
         m_FrameRateplugin->Unregister(&notify);
         m_FrameRateplugin->Release();
@@ -235,6 +254,11 @@ FrameRate_L2test::~FrameRate_L2test() {
     /* Deactivate plugin in destructor */
     status = DeactivateService("org.rdk.FrameRate");
     EXPECT_EQ(Core::ERROR_NONE, status);
+
+    status = DeactivateService("org.rdk.DeviceSettings");
+    EXPECT_EQ(Core::ERROR_NONE, status);
+
+    DsVideoDeviceHalMock::setImpl(nullptr);
 }
 
 void FrameRate_L2test::OnFpsEvent(int average, int min, int max) {
@@ -465,14 +489,11 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateUsingComrpc) {
     bool success = false;
     uint32_t signalled_pre = FrameRate_StateInvalid;
     uint32_t signalled_post = FrameRate_StateInvalid;
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](const char *param) {
-                EXPECT_EQ(param, string("3840x2160px48"));
-                return 0;
+            [&](intptr_t, char* framerate) {
+                EXPECT_EQ(string(framerate), string("3840x2160px48"));
+                return dsERR_NONE;
             }));
     status = m_FrameRateplugin->SetDisplayFrameRate("3840x2160px48", success);
 
@@ -510,15 +531,11 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateFailureUsingComrpc) {
 *******************************************************/
 
 TEST_F(FrameRate_L2test, GetDisplayFrameRateUsingComrpc) {
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](char *param) {
-                string framerate("3840x2160px48");
-                ::memcpy(param, framerate.c_str(), framerate.length());
-                return 0;
+            [](intptr_t, char* framerate) {
+                if (framerate) { strcpy(framerate, "3840x2160px48"); }
+                return dsERR_NONE;
             }));
     uint32_t status = Core::ERROR_GENERAL;
     bool success = false;
@@ -545,15 +562,12 @@ TEST_F(FrameRate_L2test, SetFrmModeUsingComrpc) {
     uint32_t status = Core::ERROR_GENERAL;
     bool success = false;
     int frmmode = 0;
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
 
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](int param) {
+            [&](intptr_t, int param) {
                 EXPECT_EQ(param, 0);
-                return 0;
+                return dsERR_NONE;
             }));
 
     status = m_FrameRateplugin->SetFrmMode(frmmode, success);
@@ -596,14 +610,11 @@ TEST_F(FrameRate_L2test, GetFrmModeUsingComrpc) {
     uint32_t status = Core::ERROR_GENERAL;
     bool success = false;
     int frmmode = 0;
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](int *param) {
-                *param = 0;
-                return 0;
+            [](intptr_t, int* out) {
+                if (out) { *out = 0; }
+                return dsERR_NONE;
             }));
     status = m_FrameRateplugin->GetFrmMode(frmmode, success);
     if (status != Core::ERROR_NONE) {
@@ -619,7 +630,10 @@ TEST_F(FrameRate_L2test, GetFrmModeUsingComrpc) {
 *******************************************************/
 TEST_F(FrameRate_L2test, onDisplayFrameRateChanging)
 {
-    l_listener->OnDisplayFrameratePreChange("3840x2160px48");
+    // Simulates the dsVideoDevice HAL firing the framerate pre-change callback that
+    // DeviceSettingsVideoDeviceImplementation registered, forwarded to FrameRate over COM-RPC.
+    ASSERT_NE(m_dsFrameratePreChangeCB, nullptr);
+    m_dsFrameratePreChangeCB(48);
 }
 
 /************Test case Details **************************
@@ -627,7 +641,8 @@ TEST_F(FrameRate_L2test, onDisplayFrameRateChanging)
 *******************************************************/
 TEST_F(FrameRate_L2test, onDisplayFrameRateChanged)
 {
-    l_listener->OnDisplayFrameratePostChange("3840x2160px48");
+    ASSERT_NE(m_dsFrameratePostChangeCB, nullptr);
+    m_dsFrameratePostChangeCB(48);
 }
 
 /************Test case Details **************************
@@ -757,14 +772,11 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](const char *param) {
-                EXPECT_EQ(param, string("3840x2160px48"));
-                return 0;
+            [&](intptr_t, char* framerate) {
+                EXPECT_EQ(string(framerate), string("3840x2160px48"));
+                return dsERR_NONE;
             }));
 
     /*With both Params expecting Success*/
@@ -805,16 +817,12 @@ TEST_F(FrameRate_L2test, GetDisplayFrameRateUsingJsonrpc) {
     uint32_t status = Core::ERROR_GENERAL;
     JsonObject params;
     JsonObject result;
-    
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
+
+    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](char *param) {
-                string framerate("3840x2160px48");
-                ::memcpy(param, framerate.c_str(), framerate.length());
-                return 0;
+            [](intptr_t, char* framerate) {
+                if (framerate) { strcpy(framerate, "3840x2160px48"); }
+                return dsERR_NONE;
             }));
 
     /*With both Params expecting Success*/
@@ -837,14 +845,11 @@ TEST_F(FrameRate_L2test, SetFrmModeUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](int param) {
+            [&](intptr_t, int param) {
                 EXPECT_EQ(param, 0);
-                return 0;
+                return dsERR_NONE;
             }));
 
     /*With both Params expecting Success*/
@@ -886,14 +891,11 @@ TEST_F(FrameRate_L2test, GetFrmModeUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    device::VideoDevice videoDevice;
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
+    ON_CALL(dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](int *param) {
-                *param = 0;
-                return 0;
+            [](intptr_t, int* out) {
+                if (out) { *out = 0; }
+                return dsERR_NONE;
             }));
 
     /*With both Params expecting Success*/

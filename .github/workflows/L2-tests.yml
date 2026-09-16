@@ -115,6 +115,26 @@ jobs:
           path: googletest
           ref: v1.15.0
 
+      # FrameRate now talks to DeviceSettings over COM-RPC. The real entservices-devicesettings
+      # plugin is built and activated in the L2 test so onDisplayFrameRateChanging/Changed and
+      # the video-device methods exercise the genuine plugin-to-plugin COM-RPC path; its
+      # dsVideoDevice HAL calls are satisfied by the ds-hal GTest stub below instead of real hardware.
+      - name: Checkout entservices-devicesettings
+        uses: actions/checkout@v3
+        with:
+          repository: rdkcentral/entservices-devicesettings
+          path: entservices-devicesettings
+          ref: develop
+
+      # dsTypes.h/dsVideoDevice.h HAL header contract (not the legacy libds/IARM
+      # implementation, which entservices-devicesettings no longer depends on).
+      - name: Checkout rdk-halif-device_settings
+        uses: actions/checkout@v3
+        with:
+          repository: rdkcentral/rdk-halif-device_settings
+          path: rdk-halif-device_settings
+          ref: main
+
       - name: Build ThunderTools
         run: >
           cmake
@@ -329,6 +349,63 @@ jobs:
           cmake --build build/entservices-helpers
           &&
           cmake --install build/entservices-helpers
+
+      - name: Copy DeviceSettings HAL headers
+        run: >
+          mkdir -p "$GITHUB_WORKSPACE/install/usr/include"
+          &&
+          cp -r "$GITHUB_WORKSPACE/rdk-halif-device_settings/include/." "$GITHUB_WORKSPACE/install/usr/include/"
+
+      # GTest-controllable stand-in for libds-hal (see DsVideoDeviceHalMock.h). Must be
+      # installed before building entservices-devicesettings so find_library(NAMES ds-hal)
+      # resolves to this instead of requiring real hardware HAL.
+      - name: Build ds-hal stub
+        run: >
+          cmake
+          -S "$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings"
+          -B build/ds-hal
+          -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
+          &&
+          cmake --build build/ds-hal -j8
+          &&
+          cmake --install build/ds-hal
+
+      - name: Build entservices-devicesettings
+        run: >
+          cmake
+          -S "$GITHUB_WORKSPACE/entservices-devicesettings"
+          -B build/entservices-devicesettings
+          -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
+          -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
+          -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
+          -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
+          -DCMAKE_CXX_FLAGS="
+          -DEXCEPTIONS_ENABLE=ON
+          -DUSE_THUNDER_R4=ON
+          -DTHUNDER_VERSION=4
+          -DTHUNDER_VERSION_MAJOR=4
+          -DTHUNDER_VERSION_MINOR=4
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmbus
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
+          -I $GITHUB_WORKSPACE/install/usr/include
+          -I $GITHUB_WORKSPACE/install/usr/include/WPEFramework
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/maintenanceMGR.h
+          -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=
+          -DUSE_IARMBUS
+          -DUSE_DS"
+          -DCOMCAST_CONFIG=OFF
+          -DCMAKE_DISABLE_FIND_PACKAGE_IARMBus=ON
+          -DDS_FOUND=ON
+          -DPLUGIN_DEVICESETTINGS=ON
+          -DUSE_THUNDER_R4=ON
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          &&
+          cmake --build build/entservices-devicesettings -j8
+          &&
+          cmake --install build/entservices-devicesettings
 
       - name: Build entservices-framerate
         run: >
