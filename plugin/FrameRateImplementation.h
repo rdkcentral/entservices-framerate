@@ -163,7 +163,7 @@ namespace WPEFramework {
                  *
                  * Decouples FrameRateImplementation from COM-RPC sub-interface event types.
                  * Register &_DSVideoDeviceNotification with vd->Register() — not 'this'.
-                 * Callbacks delegate to the private helpers on FrameRateImplementation.
+                 * Callbacks delegate to the public handlers on FrameRateImplementation.
                  *
                  * MIGRATION PATTERN: Apply this same inner DSVideoDeviceNotification class to all future
                  * client plugins that use DeviceSettingsClientHelper.
@@ -194,11 +194,12 @@ namespace WPEFramework {
                 Core::Sink<DSVideoDeviceNotification> _DSVideoDeviceNotification; // COM-RPC event delegate — initialized in constructor with *this
                 void OnDeviceSettingsActivated() override;
                 void OnDeviceSettingsDeactivated() override;
-                // Private helpers — called from Notification inner class
-                void OnDisplayFrameratePreChange(const std::string& frameRate);
-                void OnDisplayFrameratePostChange(const std::string& frameRate);
                 friend class Job;
 
+            public:
+                // Called from Notification inner class; public for direct test invocation (see L1 tests).
+                void OnDisplayFrameratePreChange(const std::string& frameRate);
+                void OnDisplayFrameratePostChange(const std::string& frameRate);
         };
     } // namespace Plugin
 } // namespace WPEFramework
