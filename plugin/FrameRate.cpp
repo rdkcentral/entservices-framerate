@@ -122,6 +122,7 @@ namespace WPEFramework
                 RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
                 VARIABLE_IS_NOT_USED uint32_t result = _FrameRate->Release();
                 _FrameRate = nullptr;
+                _FrameRate->Release();
 
                 // It should have been the last reference we are releasing,
                 // so it should endup in a DESTRUCTION_SUCCEEDED, if not we
