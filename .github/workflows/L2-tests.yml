@@ -386,12 +386,14 @@ jobs:
           -DTHUNDER_VERSION=4
           -DTHUNDER_VERSION_MAJOR=4
           -DTHUNDER_VERSION_MINOR=4
+          -DDS_MGR_EVENTID_T_PROVIDED_BY_DEVICESETTINGS
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmbus
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
           -I $GITHUB_WORKSPACE/install/usr/include
           -I $GITHUB_WORKSPACE/install/usr/include/WPEFramework
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/maintenanceMGR.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Telemetry.h
           -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=

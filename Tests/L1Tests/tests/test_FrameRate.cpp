@@ -96,6 +96,25 @@ protected:
                 ::testing::SetArgReferee<1>(0),
                 ::testing::Return(Core::ERROR_NONE)));
 
+        // DSHelper::Open() registers as an IPlugin::INotification observer for the
+        // "org.rdk.DeviceSettings" callsign (RPC::PluginSmartInterfaceType); it does NOT
+        // call QueryInterfaceByCallsign. Simulate DeviceSettings already being active by
+        // invoking Activated() synchronously from within Register(), then hand back the
+        // DeviceSettingsMock root when the framework QueryInterface()s the "plugin".
+        ON_CALL(service, Register(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](PluginHost::IPlugin::INotification* sink) {
+                    sink->Activated("org.rdk.DeviceSettings", &service);
+                }));
+
+        ON_CALL(service, QueryInterface(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](const uint32_t) -> void* {
+                    auto* root = DeviceSettingsMock::Get();
+                    root->AddRef();
+                    return static_cast<Exchange::IDeviceSettings*>(root);
+                }));
+
         ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::_))
             .WillByDefault(::testing::Invoke(
                 [&](const uint32_t, const string&) -> void* {
