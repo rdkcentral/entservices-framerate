@@ -32,6 +32,7 @@
 // can control DeviceSettingsVideoDeviceImplementation's behavior, mirroring how
 // UsbMassStorage's L2 test controls the real UsbDevice plugin via libUSBApiImplMock.
 #include "DsVideoDeviceHalMock.h"
+#include "TelemetryMock.h"
 
 #define JSON_TIMEOUT (1000)
 #define COM_TIMEOUT (100)
@@ -149,6 +150,7 @@ public:
     dsRegisterFrameratePreChangeCB_t m_dsFrameratePreChangeCB = nullptr;
     dsRegisterFrameratePostChangeCB_t m_dsFrameratePostChangeCB = nullptr;
     NiceMock<DsVideoDeviceHalMock> dsVideoDeviceHalMock;
+    NiceMock<TelemetryApiImplMock> telemetryApiMock;
     uint32_t CreateFrameRateInterfaceObjectUsingComRPCConnection();
     void OnFpsEvent(int average, int min, int max);
     void OnDisplayFrameRateChanging(const string &displayFrameRate);
@@ -186,6 +188,19 @@ FrameRate_L2test::FrameRate_L2test()
     : L2TestMocks() {
     uint32_t status = Core::ERROR_GENERAL;
     m_event_signalled = FrameRate_StateInvalid;
+
+    // Set up TelemetryApi mock for DeviceSettings plugin
+    // DeviceSettings uses telemetry internally, so we need to provide mock implementations
+    TelemetryApi::setImpl(&telemetryApiMock);
+    ON_CALL(telemetryApiMock, t2_init(::testing::_)).WillByDefault(::testing::Return());
+    ON_CALL(telemetryApiMock, t2_uninit()).WillByDefault(::testing::Return());
+    ON_CALL(telemetryApiMock, t2_event_s(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
+    ON_CALL(telemetryApiMock, t2_event_d(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
+    ON_CALL(telemetryApiMock, t2_event_f(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
+    TEST_LOG("TelemetryApi mock initialized");
 
     // DsVideoDeviceHalMock stands in for libds-hal so the real DeviceSettings plugin's
     // dsVideoDevice component reports a single video device at handle 0.
@@ -304,7 +319,10 @@ FrameRate_L2test::~FrameRate_L2test() {
     }
     EXPECT_EQ(Core::ERROR_NONE, status);
 
+    // Clean up mocks
     DsVideoDeviceHalMock::setImpl(nullptr);
+    TelemetryApi::setImpl(nullptr);
+    TEST_LOG("Mocks cleaned up");
 }
 
 void FrameRate_L2test::OnFpsEvent(int average, int min, int max) {
