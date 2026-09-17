@@ -45,7 +45,8 @@ using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
-#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
+//#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
+#define TESTSYNC_LOG(fmt, ...) do { printf("[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stdout); } while (0)
 
 // Wraps FrameRateImplementation to observe DSHelper's OnDeviceSettingsActivated()/
 // OnDeviceSettingsDeactivated() hooks directly, independent of whatever (if anything)
@@ -141,6 +142,8 @@ protected:
         p_wrapsImplMock = new NiceMock<WrapsImplMock>;
         Wraps::setImpl(p_wrapsImplMock);
 
+        TESTSYNC_LOG("Mocks initialized");
+
         ON_CALL(DeviceSettingsMock::Mock(), GetDeviceSettingConfigs(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [hasVideoDevice](Exchange::IDeviceSettings::DeviceSettingConfigs& configs) {
@@ -209,23 +212,29 @@ protected:
                 }));
 
 #ifdef USE_THUNDER_R4
+        TESTSYNC_LOG("Setting up comLinkMock Instantiate for Thunder R4");
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
                 .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
                         auto testable = Core::ProxyType<TestableFrameRateImplementation>::Create();
                         testableImpl = &(*testable);
                         FrameRateImplem = testable;
+                        TESTSYNC_LOG("TestableFrameRateImplementation created");
                         return &FrameRateImplem;
                     }));
 #else
+        TESTSYNC_LOG("Setting up comLinkMock Instantiate for Thunder non R4");
 	ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
 	    .WillByDefault(::testing::Return(FrameRateImplem));
 #endif
 
         Core::IWorkerPool::Assign(&(*workerPool));
-            workerPool->Run();
+        workerPool->Run();
 
+        TESTSYNC_LOG("Initializing plugin");
         plugin->Initialize(&service);
+
+        TESTSYNC_LOG("Plugin initialized");
 
         // Give the async DSHelper activation job (dispatched via the real WorkerPool) a
         // bounded chance to run OnDeviceSettingsActivated() before the test body executes;
@@ -237,7 +246,10 @@ protected:
     }
     virtual ~FrameRateTestBase()
     {
+        TESTSYNC_LOG("Deinitializing plugin");
         plugin->Deinitialize(&service);
+
+        TESTSYNC_LOG("Plugin deinitialized");
 
         // Close()/Deactivated() run synchronously, so this should already be signaled by
         // the time Deinitialize() returns; kept for symmetry with the activation-side wait.
@@ -245,6 +257,8 @@ protected:
             const bool deactivated = testableImpl->WaitForDeactivated(std::chrono::milliseconds(2000));
             TESTSYNC_LOG("FrameRateTestBase dtor: WaitForDeactivated returned %d", deactivated);
         }
+
+        TESTSYNC_LOG("Cleaning up worker pool and mocks");
 
         Core::IWorkerPool::Assign(nullptr);
         workerPool.Release();
