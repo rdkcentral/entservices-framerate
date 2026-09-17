@@ -116,6 +116,16 @@ namespace WPEFramework
                 _FrameRate->Unregister(&_FrameRateNotification);
                 Exchange::JFrameRate::Unregister(*this);
 
+                // Pass IShell to FrameRateImplementation so it can open the DeviceSettings
+                // COM-RPC link. FrameRateImplementation exposes IConfiguration for this purpose.
+                Exchange::IConfiguration* config = _FrameRate->QueryInterface<Exchange::IConfiguration>();
+                if (config != nullptr) {
+                    config->Configure(nullptr);
+                    config->Release();
+                } else {
+                    LOGERR("IConfiguration not found on FrameRateImplementation");
+                }
+
                 // Stop processing:
                 RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
                 VARIABLE_IS_NOT_USED uint32_t result = _FrameRate->Release();

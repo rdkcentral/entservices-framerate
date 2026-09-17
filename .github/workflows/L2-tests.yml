@@ -396,6 +396,7 @@ jobs:
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/maintenanceMGR.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Telemetry.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=
           -DUSE_IARMBUS
           -DUSE_DS"
