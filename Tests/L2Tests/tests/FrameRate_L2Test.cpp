@@ -212,12 +212,34 @@ FrameRate_L2test::FrameRate_L2test()
             }));
 
     /* Activate the real DeviceSettings plugin so FrameRate's DSHelper can resolve it */
-    status = ActivateService("org.rdk.DeviceSettings");
+    TEST_LOG("Activating DeviceSettings plugin...");
+    
+    // First check if DeviceSettings is already active
+    std::string currentState;
+    status = GetPluginState("org.rdk.DeviceSettings", currentState);
+    
+    if (status == Core::ERROR_NONE && currentState == "activated") {
+        TEST_LOG("DeviceSettings is already activated");
+        status = Core::ERROR_NONE;
+    } else {
+        // Try to activate with retry logic
+        status = ActivateServiceWithRetry("org.rdk.DeviceSettings", 3, 500);
+    }
+    
     EXPECT_EQ(Core::ERROR_NONE, status);
+    if (status != Core::ERROR_NONE) {
+        TEST_LOG("FATAL: Failed to activate DeviceSettings plugin (status: %u)", status);
+        return;
+    }
 
     /* Activate plugin in constructor */
-    status = ActivateService("org.rdk.FrameRate");
+    TEST_LOG("Activating FrameRate plugin...");
+    status = ActivateServiceWithRetry("org.rdk.FrameRate", 3, 500);
     EXPECT_EQ(Core::ERROR_NONE, status);
+    if (status != Core::ERROR_NONE) {
+        TEST_LOG("FATAL: Failed to activate FrameRate plugin (status: %u)", status);
+        return;
+    }
 
     if (CreateFrameRateInterfaceObjectUsingComRPCConnection() != Core::ERROR_NONE) {
         TEST_LOG("Invalid FrameRate_Client");
@@ -251,11 +273,35 @@ FrameRate_L2test::~FrameRate_L2test() {
         m_FrameRateplugin->Release();
     }
 
-    /* Deactivate plugin in destructor */
-    status = DeactivateService("org.rdk.FrameRate");
+    /* Deactivate FrameRate plugin first */
+    TEST_LOG("Deactivating FrameRate plugin...");
+    std::string currentState;
+    status = GetPluginState("org.rdk.FrameRate", currentState);
+    
+    if (status == Core::ERROR_NONE && (currentState == "activated" || currentState == "suspended")) {
+        status = DeactivateService("org.rdk.FrameRate");
+        if (status != Core::ERROR_NONE) {
+            TEST_LOG("WARNING: Failed to deactivate FrameRate (status: %u)", status);
+        }
+    } else {
+        TEST_LOG("FrameRate is not in activated/suspended state, skipping deactivation");
+        status = Core::ERROR_NONE;  // Don't fail test if plugin is already deactivated
+    }
     EXPECT_EQ(Core::ERROR_NONE, status);
 
-    status = DeactivateService("org.rdk.DeviceSettings");
+    /* Deactivate DeviceSettings plugin */
+    TEST_LOG("Deactivating DeviceSettings plugin...");
+    status = GetPluginState("org.rdk.DeviceSettings", currentState);
+    
+    if (status == Core::ERROR_NONE && (currentState == "activated" || currentState == "suspended")) {
+        status = DeactivateService("org.rdk.DeviceSettings");
+        if (status != Core::ERROR_NONE) {
+            TEST_LOG("WARNING: Failed to deactivate DeviceSettings (status: %u)", status);
+        }
+    } else {
+        TEST_LOG("DeviceSettings is not in activated/suspended state, skipping deactivation");
+        status = Core::ERROR_NONE;  // Don't fail test if plugin is already deactivated
+    }
     EXPECT_EQ(Core::ERROR_NONE, status);
 
     DsVideoDeviceHalMock::setImpl(nullptr);

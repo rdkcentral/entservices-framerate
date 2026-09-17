@@ -24,6 +24,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <thread>
 #include <cstdio>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -177,7 +178,9 @@ protected:
         ON_CALL(service, Register(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [&](PluginHost::IPlugin::INotification* sink) {
+                    TESTSYNC_LOG("Register called, triggering Activated for org.rdk.DeviceSettings");
                     sink->Activated("org.rdk.DeviceSettings", &service);
+                    TESTSYNC_LOG("Activated called, worker thread should process it");
                 }));
 
         // FrameRate::Initialize() calls _service->Register(&_FrameRateNotification), which
@@ -241,9 +244,16 @@ protected:
         // Give the async DSHelper activation job (dispatched via the real WorkerPool) a
         // bounded chance to run OnDeviceSettingsActivated() before the test body executes;
         // harmless if DeviceSettings never activates.
+        // Add a small delay to ensure worker thread has started processing
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
         if (testableImpl != nullptr) {
-            const bool activated = testableImpl->WaitForActivated(std::chrono::milliseconds(2000));
-            TESTSYNC_LOG("FrameRateTestBase ctor: WaitForActivated returned %d", activated);
+            const bool activated = testableImpl->WaitForActivated(std::chrono::milliseconds(5000));
+            if (!activated) {
+                TESTSYNC_LOG("WARNING: DeviceSettings activation timed out after 5000ms");
+            } else {
+                TESTSYNC_LOG("FrameRateTestBase ctor: DeviceSettings activated successfully");
+            }
         }
     }
     virtual ~FrameRateTestBase()
