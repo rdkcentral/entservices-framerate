@@ -192,14 +192,17 @@ namespace WPEFramework {
                 // Video device handle is managed by DSHelper (private _videoDeviceHandles).
                 // Access via DSHelper::getCachedVideoDeviceHandle(0).
                 Core::Sink<DSVideoDeviceNotification> _DSVideoDeviceNotification; // COM-RPC event delegate — initialized in constructor with *this
-                void OnDeviceSettingsActivated() override;
-                void OnDeviceSettingsDeactivated() override;
                 friend class Job;
 
             public:
                 // Called from Notification inner class; public for direct test invocation (see L1 tests).
                 void OnDisplayFrameratePreChange(const std::string& frameRate);
                 void OnDisplayFrameratePostChange(const std::string& frameRate);
+
+                // Called when the DeviceSettings plugin is activated or deactivated.
+                // It is also overridden from unit tests to synchronize with the activation/deactivation events.
+                void OnDeviceSettingsActivated() override;
+                void OnDeviceSettingsDeactivated() override;
         };
     } // namespace Plugin
 } // namespace WPEFramework
