@@ -42,6 +42,52 @@ using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
+// Wraps FrameRateImplementation to observe DSHelper's OnDeviceSettingsActivated()/
+// OnDeviceSettingsDeactivated() hooks directly, independent of whatever (if anything)
+// those methods do internally — Activated() runs via the WorkerPool's async job, so
+// tests must wait for it rather than assume it has run by the time Initialize() returns.
+class TestableFrameRateImplementation : public Plugin::FrameRateImplementation {
+public:
+    void OnDeviceSettingsActivated() override
+    {
+        Plugin::FrameRateImplementation::OnDeviceSettingsActivated();
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _activated = true;
+        }
+        _cv.notify_all();
+    }
+
+    void OnDeviceSettingsDeactivated() override
+    {
+        Plugin::FrameRateImplementation::OnDeviceSettingsDeactivated();
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _activated = false;
+            _deactivated = true;
+        }
+        _cv.notify_all();
+    }
+
+    bool WaitForActivated(const std::chrono::milliseconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _cv.wait_for(lock, timeout, [&] { return _activated; });
+    }
+
+    bool WaitForDeactivated(const std::chrono::milliseconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _cv.wait_for(lock, timeout, [&] { return _deactivated; });
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    bool _activated = false;
+    bool _deactivated = false;
+};
+
 // Shared fixture plumbing. `hasVideoDevice` controls whether the mocked
 // DeviceSettings config reports a video device (so DSHelper caches a valid
 // handle) or none (so DSHelper stays ERROR_UNAVAILABLE) — set once per test
@@ -64,6 +110,7 @@ protected:
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
     FrameRateMock* p_framerateMock = nullptr;
+    TestableFrameRateImplementation* testableImpl = nullptr;
 
     explicit FrameRateTestBase(bool hasVideoDevice)
         : plugin(Core::ProxyType<Plugin::FrameRate>::Create())
@@ -140,7 +187,9 @@ protected:
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
                 .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
-                        FrameRateImplem = Core::ProxyType<Plugin::FrameRateImplementation>::Create();
+                        auto testable = Core::ProxyType<TestableFrameRateImplementation>::Create();
+                        testableImpl = &(*testable);
+                        FrameRateImplem = testable;
                         return &FrameRateImplem;
                     }));
 #else
@@ -152,10 +201,24 @@ protected:
             workerPool->Run();
 
         plugin->Initialize(&service);
+
+        // Give the async DSHelper activation job (dispatched via the real WorkerPool) a
+        // bounded chance to run OnDeviceSettingsActivated() before the test body executes;
+        // harmless if DeviceSettings never activates.
+        if (testableImpl != nullptr) {
+            testableImpl->WaitForActivated(std::chrono::milliseconds(500));
+        }
     }
     virtual ~FrameRateTestBase()
     {
         plugin->Deinitialize(&service);
+
+        // Close()/Deactivated() run synchronously, so this should already be signaled by
+        // the time Deinitialize() returns; kept for symmetry with the activation-side wait.
+        if (testableImpl != nullptr) {
+            testableImpl->WaitForDeactivated(std::chrono::milliseconds(500));
+        }
+
         Core::IWorkerPool::Assign(nullptr);
         workerPool.Release();
 
