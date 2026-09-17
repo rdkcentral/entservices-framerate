@@ -211,11 +211,12 @@ namespace WPEFramework
          */
         uint32_t FrameRateImplementation::Configure(PluginHost::IShell* service)
         {
+            uint32_t result = Core::ERROR_NONE;
             if (nullptr != service)
             {
                 // FrameRate plugin's Initialize Flow
                 LOGINFO("FrameRateImplementation::Configure - opening DeviceSettings COM-RPC link (root IDeviceSettings)");
-                uint32_t result = DSHelper::Open(service, "FrameRate");
+                result = DSHelper::Open(service, "FrameRate");
                 if (result != Core::ERROR_NONE) {
                     LOGERR("Failed to open DeviceSettings link: %u", result);
                 }
@@ -224,7 +225,7 @@ namespace WPEFramework
             {
                 // FrameRate plugin's DeInitialize Flow
                 LOGINFO("FrameRateImplementation::Configure - closing DeviceSettings COM-RPC link (root IDeviceSettings)");
-                uint32_t result = DSHelper::Close("FrameRate");
+                result = DSHelper::Close();
                 if (result != Core::ERROR_NONE) {
                     LOGERR("Failed to close DeviceSettings link: %u", result);
                 }
