@@ -79,6 +79,15 @@ namespace WPEFramework
 
             if (nullptr != _FrameRate)
             {
+                // Pass IShell to FrameRateImplementation so it can open the DeviceSettings
+                // COM-RPC link. FrameRateImplementation exposes IConfiguration for this purpose.
+                Exchange::IConfiguration* config = _FrameRate->QueryInterface<Exchange::IConfiguration>();
+                if (config != nullptr) {
+                    config->Configure(_service);
+                    config->Release();
+                } else {
+                    LOGERR("FrameRate::Initialize: IConfiguration not found on FrameRateImplementation");
+                }
                 // Register for notifications
                 _FrameRate->Register(&_FrameRateNotification);
                 // Invoking Plugin API register to wpeframework

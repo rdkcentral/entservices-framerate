@@ -278,7 +278,7 @@ namespace WPEFramework
             Core::hresult result = vd->GetCurrentDisplayFrameRate(DSHelper::getCachedVideoDeviceHandle(0), fr);
             vd->Release();
             if (result == Core::ERROR_NONE) {
-                framerate = fr;
+                framerate = std::move(fr);
                 success = true;
             } else {
                 LOGERR("GetCurrentDisplayFrameRate COM-RPC failed: %u", result);
