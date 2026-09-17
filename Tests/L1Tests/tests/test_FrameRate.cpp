@@ -169,16 +169,16 @@ protected:
                     sink->Activated("org.rdk.DeviceSettings", &service);
                 }));
 
-        // IShell::Root<Exchange::IFrameRate>() resolves ICOMLink via service->QueryInterface<ICOMLink>()
-        // (NOT via a separate COMLink() accessor), and DSHelper's AcquireSubInterface resolves the
-        // DeviceSettings root the same way. Both interface IDs are handled by this single mock —
-        // returning the wrong object for an unrequested ID would be undefined behaviour (wrong vtable).
+        // IShell::Root<Exchange::IFrameRate>() resolves ICOMLink via the dedicated
+        // service->COMLink() accessor (NOT QueryInterface() - ICOMLink isn't a
+        // Core::IUnknown and has no ::ID). DSHelper's AcquireSubInterface separately
+        // resolves the DeviceSettings root via QueryInterface(Exchange::IDeviceSettings::ID).
+        ON_CALL(service, COMLink())
+            .WillByDefault(::testing::Return(&comLinkMock));
+
         ON_CALL(service, QueryInterface(::testing::_))
             .WillByDefault(::testing::Invoke(
                 [&](const uint32_t id) -> void* {
-                    if (id == static_cast<uint32_t>(PluginHost::IShell::ICOMLink::ID)) {
-                        return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
-                    }
                     if (id == static_cast<uint32_t>(Exchange::IDeviceSettings::ID)) {
                         auto* root = DeviceSettingsMock::Get();
                         root->AddRef();
