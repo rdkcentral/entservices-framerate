@@ -24,6 +24,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <cstdio>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "FrameRate.h"
 
@@ -42,6 +45,8 @@ using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
+#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
+
 // Wraps FrameRateImplementation to observe DSHelper's OnDeviceSettingsActivated()/
 // OnDeviceSettingsDeactivated() hooks directly, independent of whatever (if anything)
 // those methods do internally — Activated() runs via the WorkerPool's async job, so
@@ -51,34 +56,44 @@ public:
     void OnDeviceSettingsActivated() override
     {
         Plugin::FrameRateImplementation::OnDeviceSettingsActivated();
+        TESTSYNC_LOG("OnDeviceSettingsActivated: acquiring lock to signal activation");
         {
             std::lock_guard<std::mutex> lock(_mutex);
             _activated = true;
         }
+        TESTSYNC_LOG("OnDeviceSettingsActivated: released lock, notifying waiters");
         _cv.notify_all();
     }
 
     void OnDeviceSettingsDeactivated() override
     {
         Plugin::FrameRateImplementation::OnDeviceSettingsDeactivated();
+        TESTSYNC_LOG("OnDeviceSettingsDeactivated: acquiring lock to signal deactivation");
         {
             std::lock_guard<std::mutex> lock(_mutex);
             _activated = false;
             _deactivated = true;
         }
+        TESTSYNC_LOG("OnDeviceSettingsDeactivated: released lock, notifying waiters");
         _cv.notify_all();
     }
 
     bool WaitForActivated(const std::chrono::milliseconds timeout)
     {
+        TESTSYNC_LOG("WaitForActivated: acquiring lock");
         std::unique_lock<std::mutex> lock(_mutex);
-        return _cv.wait_for(lock, timeout, [&] { return _activated; });
+        const bool signalled = _cv.wait_for(lock, timeout, [&] { return _activated; });
+        TESTSYNC_LOG("WaitForActivated: releasing lock, signalled=%d", signalled);
+        return signalled;
     }
 
     bool WaitForDeactivated(const std::chrono::milliseconds timeout)
     {
+        TESTSYNC_LOG("WaitForDeactivated: acquiring lock");
         std::unique_lock<std::mutex> lock(_mutex);
-        return _cv.wait_for(lock, timeout, [&] { return _deactivated; });
+        const bool signalled = _cv.wait_for(lock, timeout, [&] { return _deactivated; });
+        TESTSYNC_LOG("WaitForDeactivated: releasing lock, signalled=%d", signalled);
+        return signalled;
     }
 
 private:
@@ -154,12 +169,22 @@ protected:
                     sink->Activated("org.rdk.DeviceSettings", &service);
                 }));
 
+        // IShell::Root<Exchange::IFrameRate>() resolves ICOMLink via service->QueryInterface<ICOMLink>()
+        // (NOT via a separate COMLink() accessor), and DSHelper's AcquireSubInterface resolves the
+        // DeviceSettings root the same way. Both interface IDs are handled by this single mock —
+        // returning the wrong object for an unrequested ID would be undefined behaviour (wrong vtable).
         ON_CALL(service, QueryInterface(::testing::_))
             .WillByDefault(::testing::Invoke(
-                [&](const uint32_t) -> void* {
-                    auto* root = DeviceSettingsMock::Get();
-                    root->AddRef();
-                    return static_cast<Exchange::IDeviceSettings*>(root);
+                [&](const uint32_t id) -> void* {
+                    if (id == static_cast<uint32_t>(PluginHost::IShell::ICOMLink::ID)) {
+                        return static_cast<PluginHost::IShell::ICOMLink*>(&comLinkMock);
+                    }
+                    if (id == static_cast<uint32_t>(Exchange::IDeviceSettings::ID)) {
+                        auto* root = DeviceSettingsMock::Get();
+                        root->AddRef();
+                        return static_cast<void*>(static_cast<Exchange::IDeviceSettings*>(root));
+                    }
+                    return nullptr;
                 }));
 
         ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::_))
@@ -206,7 +231,8 @@ protected:
         // bounded chance to run OnDeviceSettingsActivated() before the test body executes;
         // harmless if DeviceSettings never activates.
         if (testableImpl != nullptr) {
-            testableImpl->WaitForActivated(std::chrono::milliseconds(500));
+            const bool activated = testableImpl->WaitForActivated(std::chrono::milliseconds(2000));
+            TESTSYNC_LOG("FrameRateTestBase ctor: WaitForActivated returned %d", activated);
         }
     }
     virtual ~FrameRateTestBase()
@@ -216,7 +242,8 @@ protected:
         // Close()/Deactivated() run synchronously, so this should already be signaled by
         // the time Deinitialize() returns; kept for symmetry with the activation-side wait.
         if (testableImpl != nullptr) {
-            testableImpl->WaitForDeactivated(std::chrono::milliseconds(500));
+            const bool deactivated = testableImpl->WaitForDeactivated(std::chrono::milliseconds(2000));
+            TESTSYNC_LOG("FrameRateTestBase dtor: WaitForDeactivated returned %d", deactivated);
         }
 
         Core::IWorkerPool::Assign(nullptr);
