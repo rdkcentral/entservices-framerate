@@ -225,10 +225,8 @@ namespace WPEFramework
             {
                 // FrameRate plugin's DeInitialize Flow
                 LOGINFO("FrameRateImplementation::Configure - closing DeviceSettings COM-RPC link (root IDeviceSettings)");
-                result = DSHelper::Close();
-                if (result != Core::ERROR_NONE) {
-                    LOGERR("Failed to close DeviceSettings link: %u", result);
-                }
+                DSHelper::Close();
+                result = Core::ERROR_NONE;
             }
             return result;
         }
