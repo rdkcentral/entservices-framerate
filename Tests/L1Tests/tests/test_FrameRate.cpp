@@ -45,13 +45,21 @@ using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
-//#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
-#define TESTSYNC_LOG(fmt, ...) do { printf("[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stdout); } while (0)
+// Must share DSLOG_INFO/LOGERR's stream (stderr) so lines interleave in true
+// chronological order in merged CI logs - stdout is buffered differently and its
+// output can appear reordered or displaced relative to stderr-based plugin logs.
+#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
 
 // Wraps FrameRateImplementation to observe DSHelper's OnDeviceSettingsActivated()/
 // OnDeviceSettingsDeactivated() hooks directly, independent of whatever (if anything)
 // those methods do internally — Activated() runs via the WorkerPool's async job, so
 // tests must wait for it rather than assume it has run by the time Initialize() returns.
+//
+// This subclass IS reachable: FrameRate's "root" config has no PLUGIN_FRAMERATE_MODE set,
+// so ConfigLine() renders "mode":"" - Core::JSON::EnumType<ModeType>::Deserialize() treats
+// an unrecognized enum string as still IsSet()==true (falling back to the RootConfig default
+// of ModeType::LOCAL, not OFF), so IShell::Root() takes the out-of-process branch and calls
+// COMLink()->Instantiate() (our comLinkMock, below), not the in-process ServiceAdministrator path.
 class TestableFrameRateImplementation : public Plugin::FrameRateImplementation {
 public:
     void OnDeviceSettingsActivated() override
@@ -172,10 +180,10 @@ protected:
                     sink->Activated("org.rdk.DeviceSettings", &service);
                 }));
 
-        // IShell::Root<Exchange::IFrameRate>() resolves ICOMLink via the dedicated
-        // service->COMLink() accessor (NOT QueryInterface() - ICOMLink isn't a
-        // Core::IUnknown and has no ::ID). DSHelper's AcquireSubInterface separately
-        // resolves the DeviceSettings root via QueryInterface(Exchange::IDeviceSettings::ID).
+        // FrameRate::Initialize() calls _service->Register(&_FrameRateNotification), which
+        // resolves to IShell's RPC::IRemoteConnection::INotification overload (the only base
+        // Notification implements besides Exchange::IFrameRate::INotification) - that inline
+        // helper also goes through service->COMLink()->Register().
         ON_CALL(service, COMLink())
             .WillByDefault(::testing::Return(&comLinkMock));
 
@@ -211,8 +219,10 @@ protected:
 		    return Core::ERROR_NONE;
                 }));
 
-#ifdef USE_THUNDER_R4
-        TESTSYNC_LOG("Setting up comLinkMock Instantiate for Thunder R4");
+        Core::IWorkerPool::Assign(&(*workerPool));
+        workerPool->Run();
+
+        TESTSYNC_LOG("Setting up comLinkMock Instantiate");
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
                 .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
@@ -222,14 +232,6 @@ protected:
                         TESTSYNC_LOG("TestableFrameRateImplementation created");
                         return &FrameRateImplem;
                     }));
-#else
-        TESTSYNC_LOG("Setting up comLinkMock Instantiate for Thunder non R4");
-	ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
-	    .WillByDefault(::testing::Return(FrameRateImplem));
-#endif
-
-        Core::IWorkerPool::Assign(&(*workerPool));
-        workerPool->Run();
 
         TESTSYNC_LOG("Initializing plugin");
         plugin->Initialize(&service);

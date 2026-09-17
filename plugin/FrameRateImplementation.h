@@ -19,8 +19,6 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "Module.h"
 
 #include <com/com.h>

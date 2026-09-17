@@ -406,6 +406,7 @@ jobs:
           -DCMAKE_DISABLE_FIND_PACKAGE_IARMBus=ON
           -DDS_FOUND=ON
           -DPLUGIN_DEVICESETTINGS=ON
+          -DPLUGIN_DEVICESETTINGS_MODE=Off
           -DUSE_THUNDER_R4=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
