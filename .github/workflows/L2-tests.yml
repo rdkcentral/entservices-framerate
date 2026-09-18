@@ -408,6 +408,7 @@ jobs:
           -DPLUGIN_DEVICESETTINGS=ON
           -DPLUGIN_DEVICESETTINGS_MODE=Off
           -DUSE_THUNDER_R4=ON
+          -DRDK_SERVICES_L2_TEST=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
           cmake --build build/entservices-devicesettings -j8
