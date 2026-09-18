@@ -120,6 +120,15 @@ target_link_directories(${MODULE_NAME} PUBLIC ${CMAKE_INSTALL_PREFIX}/lib ${CMAK
 
 target_link_libraries(${MODULE_NAME} ${TEST_LIB})
 
+# Link TestMocklib for telemetry and other mocks (required for L1 tests)
+find_library(TESTMOCKLIB_LIBRARIES NAMES TestMocklib)
+if(TESTMOCKLIB_LIBRARIES)
+    target_link_libraries(${MODULE_NAME} PRIVATE ${TESTMOCKLIB_LIBRARIES})
+    message(STATUS "Linking ${MODULE_NAME} against TestMocklib for mocks")
+else()
+    message(FATAL_ERROR "TestMocklib not found - required for L1 tests")
+endif()
+
 target_include_directories(${MODULE_NAME}
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
