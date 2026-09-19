@@ -29,12 +29,12 @@
 
 // FrameRate now talks to the real org.rdk.DeviceSettings plugin over COM-RPC.
 // HAL mocks stand in for libds-hal so this test can control DeviceSettings behavior
-#include "DsAudioMock.h"
-#include "DsVideoDeviceMock.h"
-#include "DsVideoPortMock.h"
-#include "DsDisplayMock.h"
-#include "DsFPDMock.h"
-#include "DsHdmiInMock.h"
+#include "DsAudioHALMock.h"
+#include "DsVideoDeviceHALMock.h"
+#include "DsVideoPortHALMock.h"
+#include "DsDisplayHALMock.h"
+#include "DsFPDHALMock.h"
+#include "DsHdmiInHALMock.h"
 #include "TelemetryMock.h"
 
 #define JSON_TIMEOUT (1000)

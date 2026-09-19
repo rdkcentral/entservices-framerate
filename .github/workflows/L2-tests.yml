@@ -128,12 +128,13 @@ jobs:
 
       # dsTypes.h/dsVideoDevice.h HAL header contract (not the legacy libds/IARM
       # implementation, which entservices-devicesettings no longer depends on).
+      # Using stable tag 6.0.1 to avoid breaking changes from main branch
       - name: Checkout rdk-halif-device_settings
         uses: actions/checkout@v3
         with:
           repository: rdkcentral/rdk-halif-device_settings
           path: rdk-halif-device_settings
-          ref: main
+          ref: 6.0.1
 
       - name: Build ThunderTools
         run: >
