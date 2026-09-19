@@ -29,13 +29,8 @@
 
 // FrameRate now talks to the real org.rdk.DeviceSettings plugin over COM-RPC.
 // HAL mocks stand in for libds-hal so this test can control DeviceSettings behavior
-#include "DsAudioHALMock.h"
-#include "DsVideoDeviceHALMock.h"
-#include "DsVideoPortHALMock.h"
-#include "DsDisplayHALMock.h"
-#include "DsFPDHALMock.h"
-#include "DsHdmiInHALMock.h"
-#include "TelemetryMock.h"
+// Note: HAL mocks (DsAudio, DsVideoDevice, DsVideoPort, DsDisplay, DsFPD, DsHdmiIn)
+// are now automatically provided by L2TestsMock - no need to include them explicitly
 
 #define JSON_TIMEOUT (1000)
 #define COM_TIMEOUT (100)
@@ -151,13 +146,13 @@ public:
     dsRegisterFrameratePreChangeCB_t m_dsFrameratePreChangeCB = nullptr;
     dsRegisterFrameratePostChangeCB_t m_dsFrameratePostChangeCB = nullptr;
     
-    // HAL Mocks - one for each DeviceSettings HAL module
-    NiceMock<DsAudioHalMock> dsAudioHalMock;
-    NiceMock<DsVideoDeviceHalMock> dsVideoDeviceHalMock;
-    NiceMock<DsVideoPortHalMock> dsVideoPortHalMock;
-    NiceMock<DsDisplayHalMock> dsDisplayHalMock;
-    NiceMock<DsFPDHalMock> dsFPDHalMock;
-    NiceMock<DsHdmiInHalMock> dsHdmiInHalMock;
+    // HAL Mocks are now provided by L2TestsMock parent class:
+    // - p_dsAudioHalMock
+    // - p_dsVideoDeviceHalMock
+    // - p_dsVideoPortHalMock
+    // - p_dsDisplayHalMock
+    // - p_dsFPDHalMock
+    // - p_dsHdmiInHalMock
     NiceMock<TelemetryApiImplMock> telemetryApiMock;
     uint32_t CreateFrameRateInterfaceObjectUsingComRPCConnection();
     void OnFpsEvent(int average, int min, int max);
@@ -209,97 +204,60 @@ FrameRate_L2test::FrameRate_L2test()
         .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
     TEST_LOG("TelemetryApi mock initialized");
 
-    // Initialize all HAL mocks - these stand in for libds-hal.so
+    // Configure FrameRate-specific HAL mock behaviors
+    // Note: Common Init/Term behaviors are already set up by L2TestsMock
+    // FrameRate plugin ONLY uses IDeviceSettingsVideoDevice interface
+    // So we only need VideoDevice and VideoPort HAL mocks
     
-    // 1. Audio HAL Mock
-    DsAudioApi::setImpl(&dsAudioHalMock);
-    ON_CALL(dsAudioHalMock, dsAudioPortInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsAudioHalMock, dsAudioPortTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsAudioHalMock, dsGetAudioPort(::testing::_, ::testing::_, ::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [](dsAudioPortType_t, int, intptr_t* handle) {
-                if (handle) { *handle = 1; }
-                return dsERR_NONE;
-            }));
-    ON_CALL(dsAudioHalMock, dsSetStereoAuto(::testing::_, ::testing::_))
-        .WillByDefault(::testing::Return(dsERR_NONE));
-    TEST_LOG("DsAudioApi mock initialized");
-    
-    // 2. VideoDevice HAL Mock
-    DsVideoDeviceApi::setImpl(&dsVideoDeviceHalMock);
-    ON_CALL(dsVideoDeviceHalMock, dsVideoDeviceInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsVideoDeviceHalMock, dsVideoDeviceTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsVideoDeviceHalMock, dsGetVideoDevice(::testing::_, ::testing::_))
+    // 1. VideoDevice HAL Mock - FrameRate CORE functionality
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetVideoDevice(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](int, intptr_t* handle) {
                 if (handle) { *handle = 1; }
                 return dsERR_NONE;
             }));
-    ON_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, char* framerate) {
                 if (framerate) strcpy(framerate, "60");
                 return dsERR_NONE;
             }));
-    ON_CALL(dsVideoDeviceHalMock, dsRegisterFrameratePreChangeCB(::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsRegisterFrameratePreChangeCB(::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](dsRegisterFrameratePreChangeCB_t cbFunc) {
                 m_dsFrameratePreChangeCB = cbFunc;
                 return dsERR_NONE;
             }));
-    ON_CALL(dsVideoDeviceHalMock, dsRegisterFrameratePostChangeCB(::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsRegisterFrameratePostChangeCB(::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](dsRegisterFrameratePostChangeCB_t cbFunc) {
                 m_dsFrameratePostChangeCB = cbFunc;
                 return dsERR_NONE;
             }));
-    TEST_LOG("DsVideoDeviceApi mock initialized");
+    TEST_LOG("DsVideoDeviceApi FrameRate-specific behaviors configured");
     
-    // 3. VideoPort HAL Mock
-    DsVideoPortApi::setImpl(&dsVideoPortHalMock);
-    ON_CALL(dsVideoPortHalMock, dsVideoPortInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsVideoPortHalMock, dsVideoPortTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsVideoPortHalMock, dsGetVideoPort(::testing::_, ::testing::_, ::testing::_))
+    // 2. VideoPort HAL Mock - FrameRate specific behaviors only
+    ON_CALL(*p_dsVideoPortHalMock, dsGetVideoPort(::testing::_, ::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](dsVideoPortType_t, int, intptr_t* handle) {
                 if (handle) { *handle = 1; }
                 return dsERR_NONE;
             }));
-    ON_CALL(dsVideoPortHalMock, dsIsDisplayConnected(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoPortHalMock, dsIsDisplayConnected(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, bool* connected) {
                 if (connected) { *connected = true; }
                 return dsERR_NONE;
             }));
-    TEST_LOG("DsVideoPortApi mock initialized");
+    TEST_LOG("DsVideoPortApi FrameRate-specific behaviors configured");
     
-    // 4. Display HAL Mock
-    DsDisplayApi::setImpl(&dsDisplayHalMock);
-    ON_CALL(dsDisplayHalMock, dsDisplayInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsDisplayHalMock, dsDisplayTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsDisplayHalMock, dsGetDisplay(::testing::_, ::testing::_, ::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [](dsVideoPortType_t, int, intptr_t* handle) {
-                if (handle) { *handle = 1; }
-                return dsERR_NONE;
-            }));
-    TEST_LOG("DsDisplayApi mock initialized");
+    // Note: Audio, Display, FPD, and HdmiIn HAL mocks are NOT used by FrameRate plugin
+    // FrameRate only uses IDeviceSettingsVideoDevice interface (VideoDevice + VideoPort HAL)
+    // Other HAL mocks are available from L2TestsMock if DeviceSettings plugin needs them
     
-    // 5. FPD HAL Mock
-    DsFPDApi::setImpl(&dsFPDHalMock);
-    ON_CALL(dsFPDHalMock, dsFPInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsFPDHalMock, dsFPTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    TEST_LOG("DsFPDApi mock initialized");
-    
-    // 6. HdmiIn HAL Mock
-    DsHdmiInApi::setImpl(&dsHdmiInHalMock);
-    ON_CALL(dsHdmiInHalMock, dsHdmiInInit()).WillByDefault(::testing::Return(dsERR_NONE));
-    ON_CALL(dsHdmiInHalMock, dsHdmiInTerm()).WillByDefault(::testing::Return(dsERR_NONE));
-    TEST_LOG("DsHdmiInApi mock initialized");
-    
-    TEST_LOG("All HAL mocks initialized successfully");
+    TEST_LOG("FrameRate HAL mock setup complete - VideoDevice and VideoPort configured");
 
     /* Activate the real DeviceSettings plugin so FrameRate's DSHelper can resolve it */
     TEST_LOG("Activating DeviceSettings plugin...");
