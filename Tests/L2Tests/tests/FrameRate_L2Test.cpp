@@ -40,6 +40,7 @@
 #define FrameRate_CALLSIGN _T("org.rdk.FrameRate.1")
 #define FrameRateL2TEST_CALLSIGN _T("L2tests.1")
 
+
 using ::testing::NiceMock;
 using namespace WPEFramework;
 using testing::StrictMock;
