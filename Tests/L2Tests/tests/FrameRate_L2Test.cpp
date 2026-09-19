@@ -592,7 +592,7 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateUsingComrpc) {
     bool success = false;
     uint32_t signalled_pre = FrameRate_StateInvalid;
     uint32_t signalled_post = FrameRate_StateInvalid;
-    ON_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](intptr_t, char* framerate) {
                 EXPECT_EQ(string(framerate), string("3840x2160px48"));
@@ -634,7 +634,7 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateFailureUsingComrpc) {
 *******************************************************/
 
 TEST_F(FrameRate_L2test, GetDisplayFrameRateUsingComrpc) {
-    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, char* framerate) {
                 if (framerate) { strcpy(framerate, "3840x2160px48"); }
@@ -666,7 +666,7 @@ TEST_F(FrameRate_L2test, SetFrmModeUsingComrpc) {
     bool success = false;
     int frmmode = 0;
 
-    ON_CALL(dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](intptr_t, int param) {
                 EXPECT_EQ(param, 0);
@@ -713,7 +713,7 @@ TEST_F(FrameRate_L2test, GetFrmModeUsingComrpc) {
     uint32_t status = Core::ERROR_GENERAL;
     bool success = false;
     int frmmode = 0;
-    ON_CALL(dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, int* out) {
                 if (out) { *out = 0; }
@@ -875,7 +875,7 @@ TEST_F(FrameRate_L2test, SetDisplayFrameRateUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    ON_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](intptr_t, char* framerate) {
                 EXPECT_EQ(string(framerate), string("3840x2160px48"));
@@ -921,7 +921,7 @@ TEST_F(FrameRate_L2test, GetDisplayFrameRateUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, char* framerate) {
                 if (framerate) { strcpy(framerate, "3840x2160px48"); }
@@ -948,7 +948,7 @@ TEST_F(FrameRate_L2test, SetFrmModeUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    ON_CALL(dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsSetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [&](intptr_t, int param) {
                 EXPECT_EQ(param, 0);
@@ -994,7 +994,7 @@ TEST_F(FrameRate_L2test, GetFrmModeUsingJsonrpc) {
     JsonObject params;
     JsonObject result;
 
-    ON_CALL(dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t, int* out) {
                 if (out) { *out = 0; }
@@ -1023,7 +1023,7 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_WithMockVerification) {
     
     // Arrange: Set up expectations on the HAL mock
     std::string capturedFramerate;
-    EXPECT_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .Times(1)
         .WillOnce(::testing::Invoke(
             [&capturedFramerate](intptr_t handle, const char* framerate) {
@@ -1062,7 +1062,7 @@ TEST_F(FrameRate_L2test, E2E_GetDisplayFrameRate_WithMockVerification) {
     TEST_LOG("=== E2E Test: GetDisplayFrameRate with Mock Verification ===");
     
     // Arrange: Configure mock to return "120" Hz
-    ON_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [](intptr_t handle, char* framerate) {
                 TEST_LOG("HAL Mock: dsGetCurrentDisplayframerate called with handle=%ld", handle);
@@ -1100,7 +1100,7 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_HALErrorHandling) {
     TEST_LOG("=== E2E Test: HAL Error Handling ===");
     
     // Arrange: Configure mock to return error
-    EXPECT_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::_))
         .Times(1)
         .WillOnce(::testing::Invoke(
             [](intptr_t handle, const char* framerate) {
@@ -1135,11 +1135,11 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
     // Arrange: Expect multiple HAL calls
     ::testing::InSequence seq;
     
-    EXPECT_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("60")))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("60")))
         .Times(1)
         .WillOnce(::testing::Return(dsERR_NONE));
     
-    EXPECT_CALL(dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsGetCurrentDisplayframerate(::testing::_, ::testing::_))
         .Times(1)
         .WillOnce(::testing::Invoke(
             [](intptr_t, char* framerate) {
@@ -1147,7 +1147,7 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
                 return dsERR_NONE;
             }));
     
-    EXPECT_CALL(dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("120")))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("120")))
         .Times(1)
         .WillOnce(::testing::Return(dsERR_NONE));
     
@@ -1184,7 +1184,7 @@ TEST_F(FrameRate_L2test, E2E_AudioHAL_Integration) {
     // This is implicit - if DeviceSettings activated successfully, audio HAL was initialized
     
     // Arrange: Set up audio HAL expectations
-    EXPECT_CALL(dsAudioHalMock, dsSetStereoAuto(::testing::_, ::testing::_))
+    EXPECT_CALL(*p_dsAudioHalMock, dsSetStereoAuto(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(0))  // May be called during initialization
         .WillRepeatedly(::testing::Return(dsERR_NONE));
     
@@ -1204,7 +1204,7 @@ TEST_F(FrameRate_L2test, E2E_VideoPortHAL_Integration) {
     bool displayConnected = false;
     
     // Configure mock
-    ON_CALL(dsVideoPortHalMock, dsIsDisplayConnected(::testing::_, ::testing::_))
+    ON_CALL(*p_dsVideoPortHalMock, dsIsDisplayConnected(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
             [&displayConnected](intptr_t, bool* connected) {
                 TEST_LOG("HAL Mock: dsIsDisplayConnected called");
