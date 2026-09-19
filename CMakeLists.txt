@@ -20,6 +20,7 @@
 cmake_minimum_required(VERSION 3.3)
 
 find_package(WPEFramework)
+find_package(${NAMESPACE}Helpers REQUIRED)
 
 # All packages that did not deliver a CMake Find script (and some deprecated scripts that need to be removed)
 # are located in the cmake directory. Include it in the search.
@@ -46,7 +47,7 @@ string(TOLOWER ${NAMESPACE} STORAGE_DIRECTORY)
 # for writing pc and config files
 include(CmakeHelperFunctions)
 
-if(RDK_SERVICE_L2_TEST)
+if(RDK_SERVICES_L2_TEST)
     add_subdirectory(Tests/L2Tests)
 endif()
 

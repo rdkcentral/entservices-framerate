@@ -105,7 +105,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: 2.0.3
+          ref: feature/RDKEMW-25013
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
@@ -114,6 +114,27 @@ jobs:
           repository: google/googletest
           path: googletest
           ref: v1.15.0
+
+      # FrameRate now talks to DeviceSettings over COM-RPC. The real entservices-devicesettings
+      # plugin is built and activated in the L2 test so onDisplayFrameRateChanging/Changed and
+      # the video-device methods exercise the genuine plugin-to-plugin COM-RPC path; its
+      # dsVideoDevice HAL calls are satisfied by the ds-hal GTest stub below instead of real hardware.
+      - name: Checkout entservices-devicesettings
+        uses: actions/checkout@v3
+        with:
+          repository: rdkcentral/entservices-devicesettings
+          path: entservices-devicesettings
+          ref: topic/RDKEMW-25013
+
+      # dsTypes.h/dsVideoDevice.h HAL header contract (not the legacy libds/IARM
+      # implementation, which entservices-devicesettings no longer depends on).
+      # Using stable tag 6.0.1 to avoid breaking changes from main branch
+      - name: Checkout rdk-halif-device_settings
+        uses: actions/checkout@v3
+        with:
+          repository: rdkcentral/rdk-halif-device_settings
+          path: rdk-halif-device_settings
+          ref: 6.0.1
 
       - name: Build ThunderTools
         run: >
@@ -254,6 +275,7 @@ jobs:
           rdk/ds/AudioStereoMode.hpp
           rdk/ds/VideoDFC.hpp
           dsRpc.h
+          telemetry_busmessage_sender.h
           &&
           cp -r /usr/include/gstreamer-1.0/gst /usr/include/glib-2.0/* /usr/lib/x86_64-linux-gnu/glib-2.0/include/* /usr/local/include/trower-base64/base64.h /usr/include/libdrm/drm.h /usr/include/libdrm/drm_mode.h /usr/include/xf86drm.h .
 
@@ -289,7 +311,7 @@ jobs:
           -S "$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks"
           -B build/mocks
           -DBUILD_SHARED_LIBS=ON
-          -DRDK_SERVICE_L2_TEST=ON
+          -DRDK_SERVICES_L2_TEST=ON
           -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
           -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
@@ -330,6 +352,70 @@ jobs:
           &&
           cmake --install build/entservices-helpers
 
+      - name: Copy DeviceSettings HAL headers
+        run: >
+          mkdir -p "$GITHUB_WORKSPACE/install/usr/include"
+          &&
+          cp -r "$GITHUB_WORKSPACE/rdk-halif-device_settings/include/." "$GITHUB_WORKSPACE/install/usr/include/"
+
+      # GTest-controllable stand-in for libds-hal (see DsVideoDeviceHalMock.h). Must be
+      # installed before building entservices-devicesettings so find_library(NAMES ds-hal)
+      # resolves to this instead of requiring real hardware HAL.
+      - name: Build ds-hal stub
+        run: >
+          cmake
+          -S "$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings"
+          -B build/ds-hal
+          -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
+          &&
+          cmake --build build/ds-hal -j8
+          &&
+          cmake --install build/ds-hal
+
+      - name: Build entservices-devicesettings
+        run: >
+          cmake
+          -S "$GITHUB_WORKSPACE/entservices-devicesettings"
+          -B build/entservices-devicesettings
+          -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
+          -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
+          -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
+          -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
+          -DCMAKE_CXX_FLAGS="
+          -DEXCEPTIONS_ENABLE=ON
+          -DUSE_THUNDER_R4=ON
+          -DTHUNDER_VERSION=4
+          -DTHUNDER_VERSION_MAJOR=4
+          -DTHUNDER_VERSION_MINOR=4
+          -DDS_MGR_EVENTID_T_PROVIDED_BY_DEVICESETTINGS
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmbus
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices
+          -I $GITHUB_WORKSPACE/install/usr/include
+          -I $GITHUB_WORKSPACE/install/usr/include/WPEFramework
+          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/maintenanceMGR.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Telemetry.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/secure_wrappermock.h
+          -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=
+          -DUSE_IARMBUS
+          -DUSE_DS"
+          -DCOMCAST_CONFIG=OFF
+          -DCMAKE_DISABLE_FIND_PACKAGE_IARMBus=ON
+          -DDS_FOUND=ON
+          -DPLUGIN_DEVICESETTINGS=ON
+          -DPLUGIN_DEVICESETTINGS_MODE=Off
+          -DUSE_THUNDER_R4=ON
+          -DRDK_SERVICES_L2_TEST=ON
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          &&
+          cmake --build build/entservices-devicesettings -j8
+          &&
+          cmake --install build/entservices-devicesettings
+
       - name: Build entservices-framerate
         run: >
           cmake
@@ -359,7 +445,6 @@ jobs:
           -I $GITHUB_WORKSPACE/entservices-helpers/helpers
           -I $GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h
@@ -383,7 +468,7 @@ jobs:
           -DUSE_IARMBUS
           -DENABLE_ERM
           -DRDK_LOG_MILESTONE
-          -DRDK_SERVICE_L2_TEST
+          -DRDK_SERVICES_L2_TEST
           -DDISABLE_SECURITY_TOKEN
           -DHAS_API_POWERSTATE
           -DENABLE_THERMAL_PROTECTION"
@@ -398,7 +483,7 @@ jobs:
           -DPLUGIN_FRAMERATE=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
-          -DRDK_SERVICE_L2_TEST=ON
+          -DRDK_SERVICES_L2_TEST=ON
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
@@ -434,7 +519,6 @@ jobs:
           -I $GITHUB_WORKSPACE/entservices-helpers/helpers
           -I $GITHUB_WORKSPACE/install/usr/include
           -I ./usr/include/libdrm
-          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/RBus.h
@@ -459,7 +543,7 @@ jobs:
           -DUSE_IARMBUS
           -DENABLE_ERM
           -DRDK_LOG_MILESTONE
-          -DRDK_SERVICE_L2_TEST
+          -DRDK_SERVICES_L2_TEST
           -DDISABLE_SECURITY_TOKEN
           -DHAS_API_POWERSTATE
           -DENABLE_THERMAL_PROTECTION"
@@ -474,7 +558,7 @@ jobs:
           -DPLUGIN_FRAMERATE=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
-          -DRDK_SERVICE_L2_TEST=ON
+          -DRDK_SERVICES_L2_TEST=ON
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           -DPLUGIN_ANALYTICS_SIFT_BACKEND=ON
