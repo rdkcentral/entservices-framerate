@@ -37,7 +37,6 @@
 #include "DsHdmiInHALMock.h"
 #include "TelemetryMock.h"
 
-
 #define JSON_TIMEOUT (1000)
 #define COM_TIMEOUT (100)
 #define TEST_LOG(x, ...)                                                                                                                         \
