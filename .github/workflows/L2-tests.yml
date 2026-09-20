@@ -210,7 +210,6 @@ jobs:
           &&
           mkdir -p
           headers
-          headers/rdk/ds
           headers/rdk/iarmbus
           headers/rdk/iarmmgrs-hal
           headers/systemservices
@@ -219,28 +218,6 @@ jobs:
           cd headers
           &&
           touch
-          rdk/ds/host.hpp
-          rdk/ds/videoOutputPort.hpp
-          rdk/ds/videoOutputPortType.hpp
-          rdk/ds/videoOutputPortConfig.hpp
-          rdk/ds/videoResolution.hpp
-          rdk/ds/audioOutputPort.hpp
-          rdk/ds/audioOutputPortType.hpp
-          rdk/ds/sleepMode.hpp
-          rdk/ds/frontPanelConfig.hpp
-          rdk/ds/frontPanelTextDisplay.hpp
-          rdk/ds/hdmiIn.hpp
-          rdk/ds/compositeIn.hpp
-          rdk/ds/audioOutputPortConfig.hpp
-          rdk/ds/exception.hpp
-          rdk/ds/dsError.h
-          rdk/ds/dsMgr.h
-          rdk/ds/manager.hpp
-          rdk/ds/dsTypes.h
-          rdk/ds/dsUtl.h
-          rdk/ds/audioOutputPortType.hpp
-          rdk/ds/audioOutputPortConfig.hpp
-          rdk/ds/pixelResolution.hpp
           rdk/iarmbus/libIARM.h
           rdk/iarmbus/libIBus.h
           rdk/iarmbus/libIBusDaemon.h
@@ -270,11 +247,6 @@ jobs:
           tvSettingsODM.h
           tvTypesODM.h
           tr181api.h
-          list.hpp
-          dsDisplay.h
-          rdk/ds/AudioStereoMode.hpp
-          rdk/ds/VideoDFC.hpp
-          dsRpc.h
           telemetry_busmessage_sender.h
           &&
           cp -r /usr/include/gstreamer-1.0/gst /usr/include/glib-2.0/* /usr/lib/x86_64-linux-gnu/glib-2.0/include/* /usr/local/include/trower-base64/base64.h /usr/include/libdrm/drm.h /usr/include/libdrm/drm_mode.h /usr/include/xf86drm.h .
@@ -436,7 +408,6 @@ jobs:
           -DPLUGIN_PERSISTENTSTORE_PATH="/tmp/secure/persistent/rdkservicestore"
           -DPLUGIN_PERSISTENTSTORE_LEGACYPATH="/tmp/persistent/rdkservicestore"
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers
-          -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/ds
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmbus
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/systemservices
