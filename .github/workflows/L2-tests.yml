@@ -375,7 +375,9 @@ jobs:
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Iarm.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Rfc.h
           -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/secure_wrappermock.h
+          -include $GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/Wraps.h
           -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=
+          -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog -Wl,-wrap,v_secure_system -Wl,-wrap,v_secure_popen -Wl,-wrap,v_secure_pclose
           -DUSE_IARMBUS"
           -DCOMCAST_CONFIG=OFF
           -DCMAKE_DISABLE_FIND_PACKAGE_IARMBus=ON
