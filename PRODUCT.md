@@ -2,7 +2,7 @@
 
 ## Product Description
 
-The FrameRate plugin is a Thunder/WPEFramework service designed for real-time video frame rate monitoring and analysis in RDK (Reference Design Kit) environments. This plugin provides comprehensive frame rate statistics, display synchronization monitoring, and event-driven notifications for video rendering performance optimization.
+The FrameRate plugin is a Thunder service designed for real-time video frame rate monitoring and analysis in RDK (Reference Design Kit) environments. This plugin provides comprehensive frame rate statistics, display synchronization monitoring, and event-driven notifications for video rendering performance optimization.
 
 ## Core Functionality
 

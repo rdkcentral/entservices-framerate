@@ -40,7 +40,7 @@
 #include "WorkerPoolImplementation.h"
 #include "WrapsMock.h"
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 using ::testing::NiceMock;
 

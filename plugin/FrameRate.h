@@ -25,7 +25,7 @@
 #include <interfaces/json/JFrameRate.h>
 #include <interfaces/json/JsonData_FrameRate.h>
 
-namespace WPEFramework
+namespace Thunder
 {
     namespace Plugin
     {
@@ -111,4 +111,4 @@ namespace WPEFramework
                 Core::Sink<Notification> _FrameRateNotification;
         };
     } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

@@ -26,7 +26,7 @@
 #define API_VERSION_NUMBER_MINOR 0
 #define API_VERSION_NUMBER_PATCH 0
 
-namespace WPEFramework
+namespace Thunder
 {
     namespace {
         static Plugin::Metadata<Plugin::FrameRate> metadata(
@@ -44,7 +44,7 @@ namespace WPEFramework
     namespace Plugin
     {
         /*
-         *Register FrameRate module as wpeframework plugin
+         *Register FrameRate module as thunder plugin
          **/
         SERVICE_REGISTRATION(FrameRate, API_VERSION_NUMBER_MAJOR, API_VERSION_NUMBER_MINOR, API_VERSION_NUMBER_PATCH);
 
@@ -92,7 +92,7 @@ namespace WPEFramework
             {
                 // Register for notifications
                 _FrameRate->Register(&_FrameRateNotification);
-                // Invoking Plugin API register to wpeframework
+                // Invoking Plugin API register to thunder
                 Exchange::JFrameRate::Register(*this, _FrameRate);
             }
             else
@@ -180,4 +180,4 @@ namespace WPEFramework
             }
         }
     } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

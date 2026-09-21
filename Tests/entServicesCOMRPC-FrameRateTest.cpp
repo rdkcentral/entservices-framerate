@@ -22,15 +22,15 @@
 #endif
 
 #include <iostream>
-#include <WPEFramework/com/com.h>
-#include <WPEFramework/core/core.h>
-#include "WPEFramework/interfaces/IFrameRate.h"
+#include <Thunder/com/com.h>
+#include <Thunder/core/core.h>
+#include "Thunder/interfaces/IFrameRate.h"
 
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 // RAII Wrapper for IFrameRate
 class FrameRateProxy {

@@ -28,7 +28,7 @@ const uint8_t bytes[] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0xFE, 0x03, 0x20, 
 }
 #include "ThunderPortability.h"
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 TEST(UtilsFileTest, createFolder_createFile_moveFile_verifyFile)
 {

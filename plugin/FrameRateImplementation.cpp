@@ -43,7 +43,7 @@
 #define DBGINFO(fmt, ...)
 #endif
 
-namespace WPEFramework
+namespace Thunder
 {
     namespace Plugin
     {
@@ -572,4 +572,4 @@ namespace WPEFramework
                                     frameRate));
         }
     } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

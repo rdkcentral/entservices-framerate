@@ -37,7 +37,7 @@
 #include "dsTypes.h"
 #include "host.hpp"
 
-namespace WPEFramework {
+namespace Thunder {
     namespace Plugin {
         class FrameRateImplementation : public Exchange::IFrameRate, public device::Host::IVideoDeviceEvents {
 
@@ -122,7 +122,7 @@ namespace WPEFramework {
                 static FrameRateImplementation* _instance;
 
             private:
-                std::shared_ptr<WPEFramework::JSONRPC::LinkType<WPEFramework::Core::JSON::IElement>> m_systemServiceConnection;
+                std::shared_ptr<Thunder::JSONRPC::LinkType<Thunder::Core::JSON::IElement>> m_systemServiceConnection;
                 mutable Core::CriticalSection _adminLock;
                 Core::ProxyType<RPC::InvokeServerType<1, 0, 4>> _engine;
                 Core::ProxyType<RPC::CommunicatorClient> _communicatorClient;
@@ -156,4 +156,4 @@ namespace WPEFramework {
                 void OnDisplayFrameratePostChange(const std::string& frameRate) override;
         };
     } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

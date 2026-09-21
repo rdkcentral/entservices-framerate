@@ -37,9 +37,9 @@
 #define FrameRateL2TEST_CALLSIGN _T("L2tests.1")
 
 using ::testing::NiceMock;
-using namespace WPEFramework;
+using namespace Thunder;
 using testing::StrictMock;
-using ::WPEFramework::Exchange::IFrameRate;
+using ::Thunder::Exchange::IFrameRate;
 
 typedef enum : uint32_t {
     FrameRate_OnFpsEvent = 0x00000001,
