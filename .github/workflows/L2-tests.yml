@@ -339,6 +339,7 @@ jobs:
           -S "$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks/devicesettings"
           -B build/ds-hal
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
+          -DCMAKE_CXX_FLAGS="-I $GITHUB_WORKSPACE/install/usr/include"
           &&
           cmake --build build/ds-hal -j8
           &&
