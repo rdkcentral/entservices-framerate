@@ -1109,9 +1109,10 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_WithMockVerification) {
     params["framerate"] = "3840x2160px60";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
     
-    // Assert: Verify the call succeeded
+    // Assert: Verify the call succeeded. Thunder's JSON-RPC codegen folds a lone
+    // "success" out-param into the RPC status code rather than the response body
+    // (it only appears in the body alongside other out-params, e.g. GetDisplayFrameRate).
     EXPECT_EQ(status, Core::ERROR_NONE);
-    EXPECT_TRUE(result["success"].Boolean());
     
     // Assert: Verify HAL was called with correct framerate
     EXPECT_EQ("3840x2160px60", capturedFramerate);
@@ -1226,7 +1227,8 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
     // Act: Perform multiple operations
     params["framerate"] = "3840x2160px60";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
-    EXPECT_TRUE(result["success"].Boolean());
+    // A lone "success" out-param is folded into the status code, not the response body.
+    EXPECT_EQ(status, Core::ERROR_NONE);
     
     params.Clear();
     result.Clear();
@@ -1238,7 +1240,7 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
     result.Clear();
     params["framerate"] = "3840x2160px120";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
-    EXPECT_TRUE(result["success"].Boolean());
+    EXPECT_EQ(status, Core::ERROR_NONE);
     
     TEST_LOG("=== E2E Test PASSED: All HAL calls verified ===");
 }
