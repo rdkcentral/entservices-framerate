@@ -290,7 +290,7 @@ jobs:
           -S "$GITHUB_WORKSPACE/entservices-testframework/Tests/mocks"
           -B build/mocks
           -DBUILD_SHARED_LIBS=ON
-          -DRDK_SERVICES_L2_TEST=ON
+          -DRDK_SERVICE_L2_TEST=ON
           -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
           -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
@@ -394,7 +394,7 @@ jobs:
           -Wall -Wno-unused-result -Wno-deprecated-declarations -Wno-error=format=
           -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog -Wl,-wrap,v_secure_system -Wl,-wrap,v_secure_popen -Wl,-wrap,v_secure_pclose -Wl,-wrap,unlink
           -DUSE_IARMBUS
-          -DRDK_SERVICES_L2_TEST
+          -DRDK_SERVICE_L2_TEST
           -DDISABLE_SECURITY_TOKEN
           -DHAS_API_POWERSTATE
           -DENABLE_THERMAL_PROTECTION"
@@ -409,7 +409,7 @@ jobs:
           -DPLUGIN_POWERMANAGER=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
-          -DRDK_SERVICES_L2_TEST=ON
+          -DRDK_SERVICE_L2_TEST=ON
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
@@ -454,7 +454,7 @@ jobs:
           -DPLUGIN_DEVICESETTINGS=ON
           -DPLUGIN_DEVICESETTINGS_MODE=Off
           -DUSE_THUNDER_R4=ON
-          -DRDK_SERVICES_L2_TEST=ON
+          -DRDK_SERVICE_L2_TEST=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
           cmake --build build/entservices-devicesettings -j8
@@ -512,7 +512,7 @@ jobs:
           -DUSE_IARMBUS
           -DENABLE_ERM
           -DRDK_LOG_MILESTONE
-          -DRDK_SERVICES_L2_TEST
+          -DRDK_SERVICE_L2_TEST
           -DDISABLE_SECURITY_TOKEN
           -DHAS_API_POWERSTATE
           -DENABLE_THERMAL_PROTECTION"
@@ -527,7 +527,7 @@ jobs:
           -DPLUGIN_FRAMERATE=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
-          -DRDK_SERVICES_L2_TEST=ON
+          -DRDK_SERVICE_L2_TEST=ON
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           &&
@@ -587,7 +587,7 @@ jobs:
           -DUSE_IARMBUS
           -DENABLE_ERM
           -DRDK_LOG_MILESTONE
-          -DRDK_SERVICES_L2_TEST
+          -DRDK_SERVICE_L2_TEST
           -DDISABLE_SECURITY_TOKEN
           -DHAS_API_POWERSTATE
           -DENABLE_THERMAL_PROTECTION"
@@ -602,7 +602,7 @@ jobs:
           -DPLUGIN_FRAMERATE=ON
           -DUSE_THUNDER_R4=ON
           -DPLUGIN_L2Tests=ON
-          -DRDK_SERVICES_L2_TEST=ON
+          -DRDK_SERVICE_L2_TEST=ON
           -DDS_FOUND=ON
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           -DPLUGIN_ANALYTICS_SIFT_BACKEND=ON
