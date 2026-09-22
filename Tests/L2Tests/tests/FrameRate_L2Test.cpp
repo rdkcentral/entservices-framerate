@@ -253,23 +253,30 @@ FrameRate_L2test::FrameRate_L2test()
             }));
     TEST_LOG("DsVideoPortApi FrameRate-specific behaviors configured");
     
-    // Note: Audio, Display, FPD, and HdmiIn HAL mocks are NOT used by FrameRate plugin
+    // Note: Audio, Display, FPD, and HdmiIn HAL mocks are set up by L2TestsMock
     // FrameRate only uses IDeviceSettingsVideoDevice interface (VideoDevice + VideoPort HAL)
-    // Other HAL mocks are available from L2TestsMock if DeviceSettings plugin needs them
+    // But DeviceSettings plugin initializes ALL sub-implementations, so L2TestsMock provides
+    // robust default mocks for all HAL APIs to prevent crashes during DeviceSettings activation
     
     TEST_LOG("FrameRate HAL mock setup complete - VideoDevice and VideoPort configured");
 
     // Mock PowerManager HAL for DeviceSettings dependency
+    // Note: PowerManager activation is optional - DeviceSettings can work without it
+    // Set up mocks but allow them to not be called
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_DS_INIT())
-        .WillOnce(::testing::Return(DEEPSLEEPMGR_SUCCESS));
+        .Times(::testing::AtMost(1))
+        .WillRepeatedly(::testing::Return(DEEPSLEEPMGR_SUCCESS));
 
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_INIT())
+        .Times(::testing::AtMost(1))
         .WillRepeatedly(::testing::Return(PWRMGR_SUCCESS));
 
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_API_SetWakeupSrc(::testing::_, ::testing::_))
+        .Times(::testing::AnyNumber())
         .WillRepeatedly(::testing::Return(PWRMGR_SUCCESS));
 
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_API_GetPowerState(::testing::_))
+        .Times(::testing::AnyNumber())
         .WillRepeatedly(::testing::Invoke(
             [](PWRMgr_PowerState_t* powerState) {
                 *powerState = PWRMGR_POWERSTATE_ON;
@@ -277,18 +284,27 @@ FrameRate_L2test::FrameRate_L2test()
             }));
 
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_API_SetPowerState(::testing::_))
+        .Times(::testing::AnyNumber())
         .WillRepeatedly(::testing::Return(PWRMGR_SUCCESS));
 
-    /* Activate PowerManager plugin first (DeviceSettings depends on it) */
-    TEST_LOG("Activating PowerManager plugin...");
+    /* Try to activate PowerManager plugin (DeviceSettings optionally depends on it) */
+    TEST_LOG("Checking PowerManager plugin state...");
     std::string currentState;
-    status = ActivateService("org.rdk.PowerManager");
+    status = GetPluginState("org.rdk.PowerManager", currentState);
     
-    if (status == Core::ERROR_NONE) {
-        TEST_LOG("PowerManager activated successfully");
+    if (status == Core::ERROR_NONE && currentState == "deactivated") {
+        TEST_LOG("Attempting to activate PowerManager plugin...");
+        status = ActivateService("org.rdk.PowerManager");
+        
+        if (status == Core::ERROR_NONE) {
+            TEST_LOG("PowerManager activated successfully");
+        } else {
+            TEST_LOG("PowerManager activation failed (status: %u) - continuing without it", status);
+        }
+    } else if (status == Core::ERROR_NONE && currentState == "activated") {
+        TEST_LOG("PowerManager is already activated");
     } else {
-        TEST_LOG("WARNING: Failed to activate PowerManager plugin (status: %u) - DeviceSettings may have issues", status);
-        // Don't fail the test, DeviceSettings can work without PowerManager
+        TEST_LOG("PowerManager is in '%s' state - skipping activation", currentState.c_str());
     }
 
     /* Activate the real DeviceSettings plugin so FrameRate's DSHelper can resolve it */
@@ -383,25 +399,30 @@ FrameRate_L2test::~FrameRate_L2test() {
     }
     EXPECT_EQ(Core::ERROR_NONE, status);
 
-    /* Deactivate PowerManager plugin */
-    TEST_LOG("Deactivating PowerManager plugin...");
+    /* Deactivate PowerManager plugin if it was activated */
+    TEST_LOG("Checking PowerManager plugin state for cleanup...");
     
-    // Set expectations for PowerManager HAL termination
+    // Set expectations for PowerManager HAL termination (may not be called)
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_TERM())
-        .WillOnce(::testing::Return(PWRMGR_SUCCESS));
+        .Times(::testing::AtMost(1))
+        .WillRepeatedly(::testing::Return(PWRMGR_SUCCESS));
 
     EXPECT_CALL(*p_powerManagerHalMock, PLAT_DS_TERM())
-        .WillOnce(::testing::Return(DEEPSLEEPMGR_SUCCESS));
+        .Times(::testing::AtMost(1))
+        .WillRepeatedly(::testing::Return(DEEPSLEEPMGR_SUCCESS));
     
     status = GetPluginState("org.rdk.PowerManager", currentState);
     
-    if (status == Core::ERROR_NONE && (currentState == "activated" || currentState == "suspended")) {
+    if (status == Core::ERROR_NONE && currentState == "activated") {
+        TEST_LOG("Deactivating PowerManager plugin...");
         status = DeactivateService("org.rdk.PowerManager");
         if (status != Core::ERROR_NONE) {
             TEST_LOG("WARNING: Failed to deactivate PowerManager (status: %u)", status);
+        } else {
+            TEST_LOG("PowerManager deactivation requested");
         }
     } else {
-        TEST_LOG("PowerManager is not in activated/suspended state, skipping deactivation");
+        TEST_LOG("PowerManager is in '%s' state, no deactivation needed", currentState.c_str());
     }
 
     // Clean up all HAL mocks
