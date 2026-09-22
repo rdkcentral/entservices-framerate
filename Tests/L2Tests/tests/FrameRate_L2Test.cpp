@@ -1106,7 +1106,7 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_WithMockVerification) {
             }));
     
     // Act: Call setDisplayFrameRate via JSON-RPC
-    params["framerate"] = "60";
+    params["framerate"] = "3840x2160px60";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
     
     // Assert: Verify the call succeeded
@@ -1114,7 +1114,7 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_WithMockVerification) {
     EXPECT_TRUE(result["success"].Boolean());
     
     // Assert: Verify HAL was called with correct framerate
-    EXPECT_EQ("60", capturedFramerate);
+    EXPECT_EQ("3840x2160px60", capturedFramerate);
     
     TEST_LOG("=== E2E Test PASSED: HAL was called with framerate=%s ===", capturedFramerate.c_str());
 }
@@ -1181,7 +1181,7 @@ TEST_F(FrameRate_L2test, E2E_SetDisplayFrameRate_HALErrorHandling) {
             }));
     
     // Act: Call setDisplayFrameRate via JSON-RPC
-    params["framerate"] = "60";
+    params["framerate"] = "3840x2160px60";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
     
     // Assert: Verify error is propagated
@@ -1207,7 +1207,7 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
     // Arrange: Expect multiple HAL calls
     ::testing::InSequence seq;
     
-    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("60")))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("3840x2160px60")))
         .Times(1)
         .WillOnce(::testing::Return(dsERR_NONE));
     
@@ -1215,16 +1215,16 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
         .Times(1)
         .WillOnce(::testing::Invoke(
             [](intptr_t, char* framerate) {
-                if (framerate) strcpy(framerate, "60");
+                if (framerate) strcpy(framerate, "3840x2160px60");
                 return dsERR_NONE;
             }));
     
-    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("120")))
+    EXPECT_CALL(*p_dsVideoDeviceHalMock, dsSetDisplayframerate(::testing::_, ::testing::StrEq("3840x2160px120")))
         .Times(1)
         .WillOnce(::testing::Return(dsERR_NONE));
     
     // Act: Perform multiple operations
-    params["framerate"] = "60";
+    params["framerate"] = "3840x2160px60";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
     EXPECT_TRUE(result["success"].Boolean());
     
@@ -1232,11 +1232,11 @@ TEST_F(FrameRate_L2test, E2E_MultipleHALCalls_Verification) {
     result.Clear();
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "getDisplayFrameRate", params, result);
     EXPECT_TRUE(result["success"].Boolean());
-    EXPECT_STREQ("60", result["framerate"].String().c_str());
+    EXPECT_STREQ("3840x2160px60", result["framerate"].String().c_str());
     
     params.Clear();
     result.Clear();
-    params["framerate"] = "120";
+    params["framerate"] = "3840x2160px120";
     status = InvokeServiceMethod(FrameRate_CALLSIGN, "setDisplayFrameRate", params, result);
     EXPECT_TRUE(result["success"].Boolean());
     
