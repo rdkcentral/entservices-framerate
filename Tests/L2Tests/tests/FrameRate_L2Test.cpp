@@ -153,7 +153,7 @@ public:
     // - p_dsDisplayHalMock
     // - p_dsFPDHalMock
     // - p_dsHdmiInHalMock
-    NiceMock<TelemetryApiImplMock> telemetryApiMock;
+    // - p_telemetryApiImplMock
     uint32_t CreateFrameRateInterfaceObjectUsingComRPCConnection();
     void OnFpsEvent(int average, int min, int max);
     void OnDisplayFrameRateChanging(const string &displayFrameRate);
@@ -192,15 +192,15 @@ FrameRate_L2test::FrameRate_L2test()
     uint32_t status = Core::ERROR_GENERAL;
     m_event_signalled = FrameRate_StateInvalid;
 
-    // Set up TelemetryApi mock for DeviceSettings plugin
-    TelemetryApi::setImpl(&telemetryApiMock);
-    ON_CALL(telemetryApiMock, t2_init(::testing::_)).WillByDefault(::testing::Return());
-    ON_CALL(telemetryApiMock, t2_uninit()).WillByDefault(::testing::Return());
-    ON_CALL(telemetryApiMock, t2_event_s(::testing::_, ::testing::_))
+    // TelemetryApi mock is already registered by L2TestMocks (p_telemetryApiImplMock);
+    // calling TelemetryApi::setImpl() again here would fail the (nullptr == impl) guard.
+    ON_CALL(*p_telemetryApiImplMock, t2_init(::testing::_)).WillByDefault(::testing::Return());
+    ON_CALL(*p_telemetryApiImplMock, t2_uninit()).WillByDefault(::testing::Return());
+    ON_CALL(*p_telemetryApiImplMock, t2_event_s(::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
-    ON_CALL(telemetryApiMock, t2_event_d(::testing::_, ::testing::_))
+    ON_CALL(*p_telemetryApiImplMock, t2_event_d(::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
-    ON_CALL(telemetryApiMock, t2_event_f(::testing::_, ::testing::_))
+    ON_CALL(*p_telemetryApiImplMock, t2_event_f(::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(T2ERROR_SUCCESS));
     TEST_LOG("TelemetryApi mock initialized");
 
