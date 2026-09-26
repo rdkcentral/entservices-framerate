@@ -241,7 +241,7 @@ namespace WPEFramework
             LOGINFO("FrameRateImplementation::OnDeviceSettingsActivated - registering video device events");
             // Config is loaded lazily by DSHelper::_ensureConfigLoaded() on the first accessor call.
             // No explicit LoadVideoDeviceConfig call needed here.
-            LOGINFO("VideoDevice handle: %d", DSHelper::getCachedVideoDeviceHandle(0));
+
             // Subscribe to framerate change events
             auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
             if (vd != nullptr) {
