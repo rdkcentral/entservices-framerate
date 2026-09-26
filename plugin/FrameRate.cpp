@@ -19,7 +19,6 @@
 
 #include <exception>
 #include "FrameRate.h"
-#include "manager.hpp"
 #include "UtilsJsonRpc.h"
 
 #define API_VERSION_NUMBER_MAJOR 1
@@ -73,16 +72,6 @@ namespace WPEFramework
 
             SYSLOG(Logging::Startup, (_T("FrameRate::Initialize: PID=%u"), getpid()));
 
-            try
-            {
-                device::Manager::Initialize();
-                LOGINFO("device::Manager::Initialize success");
-            }
-            catch(const std::exception& e)
-            {
-                LOGERR("device::Manager::Initialize failed, Exception: {%s}", e.what());
-            }
-
             _service = service;
             _service->AddRef();
             _service->Register(&_FrameRateNotification);
@@ -90,6 +79,15 @@ namespace WPEFramework
 
             if (nullptr != _FrameRate)
             {
+                // Pass IShell to FrameRateImplementation so it can open the DeviceSettings
+                // COM-RPC link. FrameRateImplementation exposes IConfiguration for this purpose.
+                Exchange::IConfiguration* config = _FrameRate->QueryInterface<Exchange::IConfiguration>();
+                if (config != nullptr) {
+                    config->Configure(_service);
+                    config->Release();
+                } else {
+                    LOGERR("FrameRate::Initialize: IConfiguration not found on FrameRateImplementation");
+                }
                 // Register for notifications
                 _FrameRate->Register(&_FrameRateNotification);
                 // Invoking Plugin API register to wpeframework
@@ -117,6 +115,16 @@ namespace WPEFramework
             {
                 _FrameRate->Unregister(&_FrameRateNotification);
                 Exchange::JFrameRate::Unregister(*this);
+
+                // Pass IShell to FrameRateImplementation so it can open the DeviceSettings
+                // COM-RPC link. FrameRateImplementation exposes IConfiguration for this purpose.
+                Exchange::IConfiguration* config = _FrameRate->QueryInterface<Exchange::IConfiguration>();
+                if (config != nullptr) {
+                    config->Configure(nullptr);
+                    config->Release();
+                } else {
+                    LOGERR("IConfiguration not found on FrameRateImplementation");
+                }
 
                 // Stop processing:
                 RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
@@ -153,16 +161,6 @@ namespace WPEFramework
             _connectionId = 0;
             _service->Release();
             _service = nullptr;
-
-            try
-            {
-                device::Manager::DeInitialize();
-                LOGINFO("device::Manager::DeInitialize success");
-            }
-            catch(const std::exception& e)
-            {
-                LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
-            }
 
             SYSLOG(Logging::Shutdown, (string(_T("FrameRate de-initialised"))));
         }

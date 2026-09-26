@@ -24,27 +24,101 @@
 #include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <thread>
+#include <cstdio>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "FrameRate.h"
 
 #include "FactoriesImplementation.h"
-#include "HostMock.h"
-#include "IarmBusMock.h"
 #include "ServiceMock.h"
-#include "VideoDeviceMock.h"
-#include "devicesettings.h"
-#include "ManagerMock.h"
 #include "ThunderPortability.h"
 #include "FrameRateImplementation.h"
 #include "FrameRateMock.h"
 #include "WorkerPoolImplementation.h"
 #include "WrapsMock.h"
 
+#include "DeviceSettingsMock.h"
+#include "DeviceSettingsVideoDeviceMock.h"
+
 using namespace WPEFramework;
 
 using ::testing::NiceMock;
 
-class FrameRateTest : public ::testing::Test {
+// Must share DSLOG_INFO/LOGERR's stream (stderr) so lines interleave in true
+// chronological order in merged CI logs - stdout is buffered differently and its
+// output can appear reordered or displaced relative to stderr-based plugin logs.
+#define TESTSYNC_LOG(fmt, ...) do { fprintf(stderr, "[TestSync] [%d] " fmt "\n", (int)syscall(SYS_gettid), ##__VA_ARGS__); fflush(stderr); } while (0)
+
+// Wraps FrameRateImplementation to observe DSHelper's OnDeviceSettingsActivated()/
+// OnDeviceSettingsDeactivated() hooks directly, independent of whatever (if anything)
+// those methods do internally — Activated() runs via the WorkerPool's async job, so
+// tests must wait for it rather than assume it has run by the time Initialize() returns.
+//
+// This subclass IS reachable: FrameRate's "root" config has no PLUGIN_FRAMERATE_MODE set,
+// so ConfigLine() renders "mode":"" - Core::JSON::EnumType<ModeType>::Deserialize() treats
+// an unrecognized enum string as still IsSet()==true (falling back to the RootConfig default
+// of ModeType::LOCAL, not OFF), so IShell::Root() takes the out-of-process branch and calls
+// COMLink()->Instantiate() (our comLinkMock, below), not the in-process ServiceAdministrator path.
+class TestableFrameRateImplementation : public Plugin::FrameRateImplementation {
+public:
+    void OnDeviceSettingsActivated() override
+    {
+        Plugin::FrameRateImplementation::OnDeviceSettingsActivated();
+        TESTSYNC_LOG("OnDeviceSettingsActivated: acquiring lock to signal activation");
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _activated = true;
+        }
+        TESTSYNC_LOG("OnDeviceSettingsActivated: released lock, notifying waiters");
+        _cv.notify_all();
+    }
+
+    void OnDeviceSettingsDeactivated() override
+    {
+        Plugin::FrameRateImplementation::OnDeviceSettingsDeactivated();
+        TESTSYNC_LOG("OnDeviceSettingsDeactivated: acquiring lock to signal deactivation");
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _activated = false;
+            _deactivated = true;
+        }
+        TESTSYNC_LOG("OnDeviceSettingsDeactivated: released lock, notifying waiters");
+        _cv.notify_all();
+    }
+
+    bool WaitForActivated(const std::chrono::milliseconds timeout)
+    {
+        TESTSYNC_LOG("WaitForActivated: acquiring lock");
+        std::unique_lock<std::mutex> lock(_mutex);
+        const bool signalled = _cv.wait_for(lock, timeout, [&] { return _activated; });
+        TESTSYNC_LOG("WaitForActivated: releasing lock, signalled=%d", signalled);
+        return signalled;
+    }
+
+    bool WaitForDeactivated(const std::chrono::milliseconds timeout)
+    {
+        TESTSYNC_LOG("WaitForDeactivated: acquiring lock");
+        std::unique_lock<std::mutex> lock(_mutex);
+        const bool signalled = _cv.wait_for(lock, timeout, [&] { return _deactivated; });
+        TESTSYNC_LOG("WaitForDeactivated: releasing lock, signalled=%d", signalled);
+        return signalled;
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    bool _activated = false;
+    bool _deactivated = false;
+};
+
+// Shared fixture plumbing. `hasVideoDevice` controls whether the mocked
+// DeviceSettings config reports a video device (so DSHelper caches a valid
+// handle) or none (so DSHelper stays ERROR_UNAVAILABLE) — set once per test
+// fixture, before Initialize(), since DSHelper loads config lazily on first
+// use and caches it for the DeviceSettings connection's lifetime.
+class FrameRateTestBase : public ::testing::Test {
 protected:
     Core::ProxyType<Plugin::FrameRate> plugin;
     Core::JSONRPC::Handler& handler;
@@ -61,13 +135,9 @@ protected:
     ServiceMock  *p_serviceMock  = nullptr;
     WrapsImplMock* p_wrapsImplMock = nullptr;
     FrameRateMock* p_framerateMock = nullptr;
-    HostImplMock      *p_hostImplMock = nullptr;
-    VideoDeviceMock   *p_videoDeviceMock = nullptr;
-    IARM_EventHandler_t _iarmDSFramerateEventHandler;
-    IarmBusImplMock   *p_iarmBusImplMock = nullptr ;
-    ManagerImplMock   *p_managerImplMock = nullptr ;
+    TestableFrameRateImplementation* testableImpl = nullptr;
 
-    FrameRateTest()
+    explicit FrameRateTestBase(bool hasVideoDevice)
         : plugin(Core::ProxyType<Plugin::FrameRate>::Create())
         , handler(*(plugin))
         , INIT_CONX(1, 0)
@@ -81,15 +151,63 @@ protected:
         p_wrapsImplMock = new NiceMock<WrapsImplMock>;
         Wraps::setImpl(p_wrapsImplMock);
 
-        p_managerImplMock  = new NiceMock <ManagerImplMock>;
-        device::Manager::setImpl(p_managerImplMock);
+        TESTSYNC_LOG("Mocks initialized");
 
-        p_hostImplMock  = new NiceMock <HostImplMock>;
-        device::Host::setImpl(p_hostImplMock);
+        ON_CALL(DeviceSettingsMock::Mock(), GetDeviceSettingConfigs(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [hasVideoDevice](Exchange::IDeviceSettings::DeviceSettingConfigs& configs) {
+                    if (hasVideoDevice) {
+                        Exchange::IDeviceSettings::VideoDeviceConfigInfo vdConfig{};
+                        vdConfig.numSupportedDFCs = 1;
+                        vdConfig.supportedDFCsMask = 1;
+                        vdConfig.defaultDFC = 0;
+                        configs.videoConfigs.push_back(vdConfig);
+                    }
+                    return Core::ERROR_NONE;
+                }));
+        ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetVideoDeviceHandle(0, ::testing::_))
+            .WillByDefault(::testing::DoAll(
+                ::testing::SetArgReferee<1>(0),
+                ::testing::Return(Core::ERROR_NONE)));
 
-        EXPECT_CALL(*p_managerImplMock, Initialize())
-            .Times(::testing::AnyNumber())
-            .WillRepeatedly(::testing::Return());
+        // DSHelper::Open() registers as an IPlugin::INotification observer for the
+        // "org.rdk.DeviceSettings" callsign (RPC::PluginSmartInterfaceType); it does NOT
+        // call QueryInterfaceByCallsign. Simulate DeviceSettings already being active by
+        // invoking Activated() synchronously from within Register(), then hand back the
+        // DeviceSettingsMock root when the framework QueryInterface()s the "plugin".
+        ON_CALL(service, Register(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](PluginHost::IPlugin::INotification* sink) {
+                    TESTSYNC_LOG("Register called, triggering Activated for org.rdk.DeviceSettings");
+                    sink->Activated("org.rdk.DeviceSettings", &service);
+                    TESTSYNC_LOG("Activated called, worker thread should process it");
+                }));
+
+        // FrameRate::Initialize() calls _service->Register(&_FrameRateNotification), which
+        // resolves to IShell's RPC::IRemoteConnection::INotification overload (the only base
+        // Notification implements besides Exchange::IFrameRate::INotification) - that inline
+        // helper also goes through service->COMLink()->Register().
+        ON_CALL(service, COMLink())
+            .WillByDefault(::testing::Return(&comLinkMock));
+
+        ON_CALL(service, QueryInterface(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](const uint32_t id) -> void* {
+                    if (id == static_cast<uint32_t>(Exchange::IDeviceSettings::ID)) {
+                        auto* root = DeviceSettingsMock::Get();
+                        root->AddRef();
+                        return static_cast<void*>(static_cast<Exchange::IDeviceSettings*>(root));
+                    }
+                    return nullptr;
+                }));
+
+        ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [&](const uint32_t, const string&) -> void* {
+                    auto* root = DeviceSettingsMock::Get();
+                    root->AddRef();
+                    return static_cast<Exchange::IDeviceSettings*>(root);
+                }));
 
         PluginHost::IFactories::Assign(&factoriesImplementation);
 
@@ -104,35 +222,56 @@ protected:
 		    return Core::ERROR_NONE;
                 }));
 
-#ifdef USE_THUNDER_R4
+        Core::IWorkerPool::Assign(&(*workerPool));
+        workerPool->Run();
+
+        TESTSYNC_LOG("Setting up comLinkMock Instantiate");
         ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_))
                 .WillByDefault(::testing::Invoke(
                     [&](const RPC::Object& object, const uint32_t waitTime, uint32_t& connectionId) {
-                        FrameRateImplem = Core::ProxyType<Plugin::FrameRateImplementation>::Create();
+                        auto testable = Core::ProxyType<TestableFrameRateImplementation>::Create();
+                        testableImpl = &(*testable);
+                        FrameRateImplem = testable;
+                        TESTSYNC_LOG("TestableFrameRateImplementation created");
                         return &FrameRateImplem;
                     }));
-#else
-	ON_CALL(comLinkMock, Instantiate(::testing::_, ::testing::_, ::testing::_, ::testing::_, ::testing::_))
-	    .WillByDefault(::testing::Return(FrameRateImplem));
-#endif
-        p_iarmBusImplMock  = new NiceMock <IarmBusImplMock>;
-        IarmBus::setImpl(p_iarmBusImplMock);
 
-        Core::IWorkerPool::Assign(&(*workerPool));
-            workerPool->Run();
-
+        TESTSYNC_LOG("Initializing plugin");
         plugin->Initialize(&service);
 
-        device::VideoDevice videoDevice;
-        p_videoDeviceMock  = new NiceMock <VideoDeviceMock>;
-        device::VideoDevice::setImpl(p_videoDeviceMock);
+        TESTSYNC_LOG("Plugin initialized");
 
-        ON_CALL(*p_hostImplMock, getVideoDevices())
-            .WillByDefault(::testing::Return(device::List<device::VideoDevice>({ videoDevice })));
+        // Give the async DSHelper activation job (dispatched via the real WorkerPool) a
+        // bounded chance to run OnDeviceSettingsActivated() before the test body executes;
+        // harmless if DeviceSettings never activates.
+        // Add a small delay to ensure worker thread has started processing
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        if (testableImpl != nullptr) {
+            const bool activated = testableImpl->WaitForActivated(std::chrono::milliseconds(5000));
+            if (!activated) {
+                TESTSYNC_LOG("WARNING: DeviceSettings activation timed out after 5000ms");
+            } else {
+                TESTSYNC_LOG("FrameRateTestBase ctor: DeviceSettings activated successfully");
+            }
+        }
     }
-    virtual ~FrameRateTest()
+    virtual ~FrameRateTestBase()
     {
+        TESTSYNC_LOG("Deinitializing plugin");
         plugin->Deinitialize(&service);
+
+        TESTSYNC_LOG("Plugin deinitialized");
+
+        // Close()/Deactivated() run synchronously, so this should already be signaled by
+        // the time Deinitialize() returns; kept for symmetry with the activation-side wait.
+        if (testableImpl != nullptr) {
+            const bool deactivated = testableImpl->WaitForDeactivated(std::chrono::milliseconds(2000));
+            TESTSYNC_LOG("FrameRateTestBase dtor: WaitForDeactivated returned %d", deactivated);
+        }
+
+        TESTSYNC_LOG("Cleaning up worker pool and mocks");
+
         Core::IWorkerPool::Assign(nullptr);
         workerPool.Release();
 
@@ -153,41 +292,25 @@ protected:
             p_wrapsImplMock = nullptr;
         }
 
-        device::VideoDevice::setImpl(nullptr);
-        if (p_videoDeviceMock != nullptr)
-        {
-            delete p_videoDeviceMock;
-            p_videoDeviceMock = nullptr;
-        }
-
-        EXPECT_CALL(*p_managerImplMock, DeInitialize())
-            .Times(::testing::AnyNumber())
-            .WillRepeatedly(::testing::Return());
-
-        device::Manager::setImpl(nullptr);
-        if (p_managerImplMock != nullptr)
-        {
-            delete p_managerImplMock;
-            p_managerImplMock = nullptr;
-        }
-
-        device::Host::setImpl(nullptr);
-        if (p_hostImplMock != nullptr)
-        {
-            delete p_hostImplMock;
-            p_hostImplMock = nullptr;
-        }
         dispatcher->Deactivate();
         dispatcher->Release();
 
         PluginHost::IFactories::Assign(nullptr);
-	IarmBus::setImpl(nullptr);
-        if (p_iarmBusImplMock != nullptr) {
-            delete p_iarmBusImplMock;
-            p_iarmBusImplMock = nullptr;
-        }
 
+        DeviceSettingsMock::Delete();
     }
+};
+
+// Default fixture: one video device present at handle 0.
+class FrameRateTest : public FrameRateTestBase {
+protected:
+    FrameRateTest() : FrameRateTestBase(true) {}
+};
+
+// Fixture for the "DeviceSettings has no video device" scenarios.
+class FrameRateNoDeviceTest : public FrameRateTestBase {
+protected:
+    FrameRateNoDeviceTest() : FrameRateTestBase(false) {}
 };
 
 typedef enum : uint32_t {
@@ -317,56 +440,50 @@ class L1FrameRateNotificationHandler : public Exchange::IFrameRate::INotificatio
 
 TEST_F(FrameRateTest, GetDisplayFrameRate_Success)
 {
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetCurrentDisplayFrameRate(::testing::_, ::testing::_))
         .WillByDefault(::testing::DoAll(
-            ::testing::SetArrayArgument<0>("1920x1080x60", "1920x1080x60" + 13),
-            ::testing::Return(0)));
+            ::testing::SetArgReferee<1>(string("1920x1080x60")),
+            ::testing::Return(Core::ERROR_NONE)));
 
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
     EXPECT_TRUE(response.find("\"success\":true") != string::npos);
     EXPECT_TRUE(response.find("\"framerate\":\"1920x1080x60\"") != string::npos);
 }
 
-TEST_F(FrameRateTest, GetDisplayFrameRate_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, GetDisplayFrameRate_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
 }
 
 TEST_F(FrameRateTest, GetDisplayFrameRate_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
-        .WillByDefault(::testing::Return(1));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetCurrentDisplayFrameRate(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
 }
 
 TEST_F(FrameRateTest, GetFrmMode_Success)
 {
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::DoAll(
-            ::testing::SetArgPointee<0>(1),
-            ::testing::Return(0)));
+            ::testing::SetArgReferee<1>(1),
+            ::testing::Return(Core::ERROR_NONE)));
 
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
     EXPECT_TRUE(response.find("\"success\":true") != string::npos);
     EXPECT_TRUE(response.find("\"auto-frm-mode\":1") != string::npos);
 }
 
-TEST_F(FrameRateTest, GetFrmMode_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, GetFrmMode_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
 }
 
 TEST_F(FrameRateTest, GetFrmMode_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
-        .WillByDefault(::testing::Return(1));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetFRFMode(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
 }
@@ -390,8 +507,8 @@ TEST_F(FrameRateTest, SetCollectionFrequency_MinimumValue)
 
 TEST_F(FrameRateTest, SetDisplayFrameRate_Success)
 {
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
-        .WillByDefault(::testing::Return(0));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetDisplayFrameRate(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_NONE));
 
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"1920x1080x60\"}"), response));
     EXPECT_TRUE(response.find("true") != string::npos);
@@ -417,26 +534,23 @@ TEST_F(FrameRateTest, SetDisplayFrameRate_InvalidFormat_NonDigitEnd)
     EXPECT_EQ(Core::ERROR_INVALID_PARAMETER, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"1920x1080x60x\"}"), response));
 }
 
-TEST_F(FrameRateTest, SetDisplayFrameRate_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, SetDisplayFrameRate_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"1920x1080x60\"}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"1920x1080x60\"}"), response));
 }
 
 TEST_F(FrameRateTest, SetDisplayFrameRate_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
-        .WillByDefault(::testing::Return(1));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetDisplayFrameRate(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"1920x1080x60\"}"), response));
 }
 
 TEST_F(FrameRateTest, SetFrmMode_Success_ModeZero)
 {
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
-        .WillByDefault(::testing::Return(0));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetFRFMode(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_NONE));
 
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":0}"), response));
     EXPECT_TRUE(response.find("true") != string::npos);
@@ -444,8 +558,8 @@ TEST_F(FrameRateTest, SetFrmMode_Success_ModeZero)
 
 TEST_F(FrameRateTest, SetFrmMode_Success_ModeOne)
 {
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
-        .WillByDefault(::testing::Return(0));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetFRFMode(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_NONE));
 
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":1}"), response));
     EXPECT_TRUE(response.find("true") != string::npos);
@@ -461,18 +575,15 @@ TEST_F(FrameRateTest, SetFrmMode_InvalidParameter_ValueTwo)
     EXPECT_EQ(Core::ERROR_INVALID_PARAMETER, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":2}"), response));
 }
 
-TEST_F(FrameRateTest, SetFrmMode_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, SetFrmMode_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":1}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":1}"), response));
 }
 
 TEST_F(FrameRateTest, SetFrmMode_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
-        .WillByDefault(::testing::Return(1));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetFRFMode(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":1}"), response));
 }
@@ -788,72 +899,37 @@ TEST_F(FrameRateTest, setFrmMode_InvalidParameter_NegativeMode)
     EXPECT_EQ(response, "");
 }
 
-TEST_F(FrameRateTest, setFrmMode_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, setFrmMode_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":0}"), response));
-    EXPECT_EQ(response, "");
-}
-
-TEST_F(FrameRateTest, setFrmMode_DeviceException)
-{
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](int param) {
-                throw device::Exception("Test exception");
-                return 0;
-            }));
-
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":0}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":0}"), response));
     EXPECT_EQ(response, "");
 }
 
 TEST_F(FrameRateTest, setFrmMode_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, setFRFMode(::testing::_))
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetFRFMode(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](int param) {
+            [&](int32_t, int32_t param) {
                 EXPECT_EQ(param, 0);
-                return 1;
+                return Core::ERROR_GENERAL;
             }));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setFrmMode"), _T("{\"frmmode\":0}"), response));
     EXPECT_EQ(response, "");
 }
 
-TEST_F(FrameRateTest, getFrmMode_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, getFrmMode_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
-    EXPECT_EQ(response, "");
-}
-
-TEST_F(FrameRateTest, getFrmMode_DeviceException)
-{
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](int* param) {
-                throw device::Exception("Test exception");
-                *param = 0;
-                return 0;
-            }));
-
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
     EXPECT_EQ(response, "");
 }
 
 TEST_F(FrameRateTest, getFrmMode_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, getFRFMode(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](int* param) {
-                *param = 0;
-                return 1;
-            }));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetFRFMode(::testing::_, ::testing::_))
+        .WillByDefault(::testing::DoAll(
+            ::testing::SetArgReferee<1>(0),
+            ::testing::Return(Core::ERROR_GENERAL)));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getFrmMode"), _T("{}"), response));
     EXPECT_EQ(response, "");
@@ -883,86 +959,35 @@ TEST_F(FrameRateTest, setDisplayFrameRate_InvalidParameter_InvalidFormat_EndsWit
     EXPECT_EQ(response, "");
 }
 
-TEST_F(FrameRateTest, setDisplayFrameRate_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, setDisplayFrameRate_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"3840x2160px48\"}"), response));
-    EXPECT_EQ(response, "");
-}
-
-TEST_F(FrameRateTest, setDisplayFrameRate_DeviceException)
-{
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](const char* param) {
-                throw device::Exception("Test exception");
-                return 0;
-            }));
-
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"3840x2160px48\"}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"3840x2160px48\"}"), response));
     EXPECT_EQ(response, "");
 }
 
 TEST_F(FrameRateTest, setDisplayFrameRate_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, setDisplayframerate(::testing::_))
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), SetDisplayFrameRate(::testing::_, ::testing::_))
         .WillByDefault(::testing::Invoke(
-            [&](const char* param) {
+            [&](int32_t, const string& param) {
                 EXPECT_EQ(param, string("3840x2160px48"));
-                return 1;
+                return Core::ERROR_GENERAL;
             }));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setDisplayFrameRate"), _T("{\"framerate\":\"3840x2160px48\"}"), response));
     EXPECT_EQ(response, "");
 }
 
-TEST_F(FrameRateTest, getDisplayFrameRate_NoVideoDevices)
+TEST_F(FrameRateNoDeviceTest, getDisplayFrameRate_NoVideoDevices)
 {
-    ON_CALL(*p_hostImplMock, getVideoDevices())
-        .WillByDefault(::testing::Return(device::List<device::VideoDevice>()));
-
-    EXPECT_EQ(Core::ERROR_NOT_SUPPORTED, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
-    EXPECT_EQ(response, "");
-}
-
-TEST_F(FrameRateTest, getDisplayFrameRate_DeviceException)
-{
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](char* param) {
-                throw device::Exception("Test exception");
-                string framerate("3840x2160px48");
-                ::memcpy(param, framerate.c_str(), framerate.length());
-                return 0;
-            }));
-
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
+    EXPECT_EQ(Core::ERROR_UNAVAILABLE, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
     EXPECT_EQ(response, "");
 }
 
 TEST_F(FrameRateTest, getDisplayFrameRate_DeviceError)
 {
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](char* param) {
-                param[0] = '\0';
-                return 1;
-            }));
-
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
-    EXPECT_EQ(response, "");
-}
-
-TEST_F(FrameRateTest, getDisplayFrameRate_EmptyFramerate)
-{
-    ON_CALL(*p_videoDeviceMock, getCurrentDisframerate(::testing::_))
-        .WillByDefault(::testing::Invoke(
-            [&](char* param) {
-                param[0] = '\0';
-                return 0;
-            }));
+    ON_CALL(DeviceSettingsVideoDeviceMock::Mock(), GetCurrentDisplayFrameRate(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(Core::ERROR_GENERAL));
 
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
     EXPECT_EQ(response, "");

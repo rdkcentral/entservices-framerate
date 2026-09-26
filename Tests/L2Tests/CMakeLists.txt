@@ -58,6 +58,16 @@ else (MOCKACCESSOR_LIBRARIES)
      message ("Require ${MOCKACCESSOR_LIBRARIES} library")
 endif (MOCKACCESSOR_LIBRARIES)
 
+# GTest-controllable stand-in for libds-hal (see DsVideoDeviceHalMock.h) — the real
+# entservices-devicesettings plugin links against this instead of real hardware HAL.
+find_library(DSHAL_LIBRARIES NAMES ds-hal)
+if (DSHAL_LIBRARIES)
+    message ("Found ds-hal library - ${DSHAL_LIBRARIES}")
+    target_link_libraries(${MODULE_NAME} PRIVATE ${DSHAL_LIBRARIES})
+else (DSHAL_LIBRARIES)
+     message ("Require ${DSHAL_LIBRARIES} library")
+endif (DSHAL_LIBRARIES)
+
 target_include_directories(
     ${MODULE_NAME} PRIVATE ./
     ../../../entservices-helpers/helpers
