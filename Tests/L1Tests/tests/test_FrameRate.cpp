@@ -992,3 +992,4 @@ TEST_F(FrameRateTest, getDisplayFrameRate_DeviceError)
     EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("getDisplayFrameRate"), _T("{}"), response));
     EXPECT_EQ(response, "");
 }
+
