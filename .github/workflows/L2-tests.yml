@@ -91,7 +91,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-powermanager
           path: entservices-powermanager
-          ref: topic/RDKEMW-6755_testCaseFailureFixes
+          ref: develop
 
       - name: Checkout entservices-framerate
         if: ${{ inputs.caller_source == 'local' }}
@@ -112,7 +112,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: feature/RDKEMW-25013
+          ref: develop
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
@@ -131,7 +131,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-devicesettings
           path: entservices-devicesettings
-          ref: topic/RDKEMW-25013
+          ref: develop
 
       # dsTypes.h/dsVideoDevice.h HAL header contract (not the legacy libds/IARM
       # implementation, which entservices-devicesettings no longer depends on).
