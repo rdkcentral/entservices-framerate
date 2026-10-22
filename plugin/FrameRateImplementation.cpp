@@ -69,12 +69,12 @@ namespace WPEFramework
 
         FrameRateImplementation::~FrameRateImplementation()
         {
-            {
-                auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
-                if (vd != nullptr) {
-                    vd->Unregister(&_DSVideoDeviceNotification);
-                    vd->Release();
-                }
+            // Normal teardown already unregistered + closed via Configure(nullptr); this is only a
+            // safety net for abnormal teardown paths that skip Configure(nullptr).
+            auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+            if (vd != nullptr) {
+                vd->Unregister(&_DSVideoDeviceNotification);
+                vd->Release();
             }
             DSHelper::Close();
             //Stop the timer if running
@@ -225,6 +225,13 @@ namespace WPEFramework
             {
                 // FrameRate plugin's DeInitialize Flow
                 LOGINFO("FrameRateImplementation::Configure - closing DeviceSettings COM-RPC link (root IDeviceSettings)");
+                // Unregister before Close() releases the cached sub-interface, otherwise DeviceSettings
+                // is left holding a dangling notification sink forever (resource leak).
+                auto* vd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsVideoDevice>();
+                if (vd != nullptr) {
+                    vd->Unregister(&_DSVideoDeviceNotification);
+                    vd->Release();
+                }
                 DSHelper::Close();
                 result = Core::ERROR_NONE;
             }
