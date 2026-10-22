@@ -118,7 +118,19 @@ include_directories(${TEST_INC})
 
 target_link_directories(${MODULE_NAME} PUBLIC ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib/wpeframework/plugins)
 
-target_link_libraries(${MODULE_NAME} ${TEST_LIB})
+# Link TestMocklib for telemetry and other mocks (required for L1 tests)
+find_library(TESTMOCKLIB_LIBRARIES NAMES TestMocklib)
+if(TESTMOCKLIB_LIBRARIES)
+    message(STATUS "Linking ${MODULE_NAME} against TestMocklib for mocks")
+else()
+    message(FATAL_ERROR "TestMocklib not found - required for L1 tests")
+endif()
+
+target_link_libraries(${MODULE_NAME} 
+    PRIVATE
+    ${TEST_LIB}
+    ${TESTMOCKLIB_LIBRARIES}
+)
 
 target_include_directories(${MODULE_NAME}
         PUBLIC
