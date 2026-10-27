@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.15)
 
 set(PROJECT_NAME "ENTSRVICECOMRPCTestClients")
 set(DESCRIPTION "EntServices COMRPC Client to test the COMRPC implementation.")
