@@ -22,6 +22,7 @@
 #include "Module.h"
 
 #include <interfaces/IFrameRate.h>
+#include <interfaces/IConfiguration.h>
 #include <interfaces/json/JFrameRate.h>
 #include <interfaces/json/JsonData_FrameRate.h>
 
